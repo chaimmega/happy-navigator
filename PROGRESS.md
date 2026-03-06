@@ -34,6 +34,8 @@ node scripts/screenshot.mjs  # take screenshots (server must be running)
 
 `.env.local` already exists locally with a real `ANTHROPIC_API_KEY`. Do not commit it.
 
+**Node.js v18 or later required.** (Check: `node --version`)
+
 ---
 
 ## Tech Stack
@@ -291,6 +293,23 @@ Imported by both MapView and RoutePanel — keeps display consistent, avoids cou
 
 ---
 
+## Environment Variables
+
+```env
+# .env.local (exists locally, NOT committed)
+AI_PROVIDER=anthropic          # default; set to "openai" to use OpenAI instead
+ANTHROPIC_API_KEY=sk-ant-...   # required when AI_PROVIDER=anthropic
+# OPENAI_API_KEY=sk-...        # required when AI_PROVIDER=openai (+ npm install openai)
+```
+
+---
+
+## License
+
+MIT
+
+---
+
 ## Git and GitHub
 
 ```bash
@@ -314,6 +333,7 @@ Account: **chaimmega** | Repo: **chaimmega/happy-navigator** | Branch: `main`
 - Photon works best for well-known places — obscure addresses may need exact input
 - No caching — first search takes 15–20s on free APIs
 - OpenAI provider path exists in code but requires `npm install openai` + `AI_PROVIDER=openai` in `.env.local`
+- README.md has a broken image link (`docs/screenshot.png`) — the `docs/` folder was never created; safe to ignore or delete that line
 
 ---
 
