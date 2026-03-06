@@ -163,6 +163,7 @@ export default function Home() {
     startCoords?: { lat: number; lng: number };
     endCoords?: { lat: number; lng: number };
     googleMapsUrl?: string;
+    via?: { text: string; coords?: { lat: number; lng: number } };
   }) => {
     abortRef.current?.abort();
     const controller = new AbortController();

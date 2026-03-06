@@ -72,4 +72,6 @@ export interface NavigateRequest {
   startCoords?: { lat: number; lng: number };
   endCoords?: { lat: number; lng: number };
   googleMapsUrl?: string;
+  /** Optional via-point (waypoint) to route through between start and end */
+  via?: { text: string; coords?: { lat: number; lng: number } };
 }

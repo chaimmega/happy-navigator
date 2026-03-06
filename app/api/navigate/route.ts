@@ -233,12 +233,25 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // ── 2. Fetch routes from OSRM ───────────────────────────────────────────────
+  // ── 2. Resolve optional via-point ──────────────────────────────────────────
+  let viaCoords: { lat: number; lng: number } | undefined;
+  if (body.via?.text?.trim()) {
+    const viaGeo = body.via.coords
+      ? { lat: body.via.coords.lat, lng: body.via.coords.lng, displayName: body.via.text }
+      : await geocode(body.via.text.trim());
+    if (viaGeo) {
+      viaCoords = { lat: viaGeo.lat, lng: viaGeo.lng };
+      console.log(`[navigate] via-point resolved: ${body.via.text} → ${viaGeo.lat},${viaGeo.lng}`);
+    }
+  }
+
+  // ── 3. Fetch routes from OSRM ───────────────────────────────────────────────
   let osrmRoutes;
   try {
     osrmRoutes = await getBikeRoutes(
       { lat: startGeo.lat, lng: startGeo.lng },
-      { lat: endGeo.lat, lng: endGeo.lng }
+      { lat: endGeo.lat, lng: endGeo.lng },
+      viaCoords
     );
   } catch (err) {
     console.error("[navigate] OSRM error:", err);
@@ -255,7 +268,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // ── 3. Score each route (parallel Overpass + elevation) ─────────────────────
+  // ── 4. Score each route (parallel Overpass + elevation) ─────────────────────
   console.log(`[navigate] scoring ${osrmRoutes.length} route(s) via Overpass + elevation…`);
   const scoredRoutes: ScoredRoute[] = await Promise.all(
     osrmRoutes.map(async (route, i) => {
@@ -286,7 +299,7 @@ export async function POST(req: NextRequest) {
 
   scoredRoutes.sort((a, b) => b.happyScore - a.happyScore);
 
-  // ── 4. AI explanation ───────────────────────────────────────────────────────
+  // ── 5. AI explanation ───────────────────────────────────────────────────────
   const shorten = (name: string) => name.split(",").slice(0, 2).join(",").trim();
   const startName = shorten(startGeo.displayName);
   const endName   = shorten(endGeo.displayName);

@@ -12,17 +12,20 @@ export interface OSRMRoute {
 }
 
 /**
- * Fetch up to 3 bike route alternatives between two points using OSRM.
- * Falls back to the "driving" profile label if "bike" is unavailable
- * (the public demo server supports bike, but just in case).
+ * Fetch bike route alternatives between two points (with optional via-point) using OSRM.
+ * When a via-point is supplied, alternatives are still requested but OSRM may return fewer.
  */
 export async function getBikeRoutes(
   start: Coordinates,
-  end: Coordinates
+  end: Coordinates,
+  via?: Coordinates
 ): Promise<OSRMRoute[]> {
-  const coords = `${start.lng},${start.lat};${end.lng},${end.lat}`;
+  const coordParts = via
+    ? `${start.lng},${start.lat};${via.lng},${via.lat};${end.lng},${end.lat}`
+    : `${start.lng},${start.lat};${end.lng},${end.lat}`;
+
   const url =
-    `${OSRM_BASE}/route/v1/bike/${coords}` +
+    `${OSRM_BASE}/route/v1/bike/${coordParts}` +
     `?alternatives=true&overview=full&geometries=geojson&steps=false`;
 
   const resp = await fetch(url, {
@@ -40,6 +43,5 @@ export async function getBikeRoutes(
     throw new Error(`OSRM error: ${data.code}`);
   }
 
-  // Cap at 3 alternatives
   return data.routes.slice(0, 3);
 }

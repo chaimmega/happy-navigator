@@ -37,7 +37,7 @@ export function saveRecentSearch(entry: RecentSearch) {
       JSON.stringify([entry, ...existing].slice(0, MAX_RECENT))
     );
   } catch {
-    // localStorage may be unavailable (SSR, private mode)
+    // localStorage may be unavailable
   }
 }
 
@@ -50,11 +50,10 @@ interface SearchFormProps {
     startCoords?: { lat: number; lng: number };
     endCoords?: { lat: number; lng: number };
     googleMapsUrl?: string;
+    via?: { text: string; coords?: { lat: number; lng: number } };
   }) => void;
   loading: boolean;
-  /** If set, clicking "pin" mode is active and this coordinate is pre-filled */
   mapPinPlace?: PlaceValue;
-  /** Which field the map pin is targeting */
   mapPinTarget?: "start" | "end";
   onClearMapPin?: () => void;
 }
@@ -68,6 +67,7 @@ export default function SearchForm({
 }: SearchFormProps) {
   const [startPlace, setStartPlace] = useState<PlaceValue>({ text: "" });
   const [endPlace, setEndPlace] = useState<PlaceValue>({ text: "" });
+  const [viaPlace, setViaPlace] = useState<PlaceValue | null>(null);
   const [mapsUrl, setMapsUrl] = useState("");
   const [urlMode, setUrlMode] = useState(false);
   const [showManualFallback, setShowManualFallback] = useState(false);
@@ -76,12 +76,10 @@ export default function SearchForm({
   const [recentSearches, setRecentSearches] = useState<RecentSearch[]>([]);
   const [showRecent, setShowRecent] = useState(false);
 
-  // Load recent searches on mount (client only)
   useEffect(() => {
     setRecentSearches(loadRecent());
   }, []);
 
-  // Apply map pin when it arrives from parent
   useEffect(() => {
     if (!mapPinPlace) return;
     if (mapPinTarget === "start") setStartPlace(mapPinPlace);
@@ -90,6 +88,11 @@ export default function SearchForm({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    const viaData =
+      viaPlace && viaPlace.text.trim()
+        ? { text: viaPlace.text, coords: viaPlace.coords }
+        : undefined;
+
     if (urlMode && mapsUrl.trim()) {
       onSubmit({
         start: startPlace.text,
@@ -97,6 +100,7 @@ export default function SearchForm({
         startCoords: startPlace.coords,
         endCoords: endPlace.coords,
         googleMapsUrl: mapsUrl.trim(),
+        via: viaData,
       });
     } else {
       onSubmit({
@@ -104,6 +108,7 @@ export default function SearchForm({
         end: endPlace.text,
         startCoords: startPlace.coords,
         endCoords: endPlace.coords,
+        via: viaData,
       });
     }
     setShowRecent(false);
@@ -145,6 +150,7 @@ export default function SearchForm({
   const applyRecent = (r: RecentSearch) => {
     setStartPlace({ text: r.startName, coords: r.startCoords });
     setEndPlace({ text: r.endName, coords: r.endCoords });
+    setViaPlace(null);
     setUrlMode(false);
     setShowRecent(false);
   };
@@ -203,20 +209,8 @@ export default function SearchForm({
               <p className="text-xs text-gray-400">
                 These will be used if the URL above cannot be parsed.
               </p>
-              <PlaceAutocomplete
-                id="start-fallback"
-                label="Start (fallback)"
-                placeholder="e.g. Central Park, New York"
-                value={startPlace}
-                onChange={setStartPlace}
-              />
-              <PlaceAutocomplete
-                id="end-fallback"
-                label="End (fallback)"
-                placeholder="e.g. Brooklyn Bridge, New York"
-                value={endPlace}
-                onChange={setEndPlace}
-              />
+              <PlaceAutocomplete id="start-fallback" label="Start (fallback)" placeholder="e.g. Central Park, New York" value={startPlace} onChange={setStartPlace} />
+              <PlaceAutocomplete id="end-fallback" label="End (fallback)" placeholder="e.g. Brooklyn Bridge, New York" value={endPlace} onChange={setEndPlace} />
             </div>
           )}
         </>
@@ -228,10 +222,7 @@ export default function SearchForm({
           {/* From field */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
-              <label
-                htmlFor="start"
-                className="block text-xs font-semibold text-gray-500 uppercase tracking-wide"
-              >
+              <label htmlFor="start" className="block text-xs font-semibold text-gray-500 uppercase tracking-wide">
                 From
               </label>
               <button
@@ -268,20 +259,54 @@ export default function SearchForm({
             {gpsError && <p className="mt-1 text-xs text-red-500">{gpsError}</p>}
           </div>
 
-          {/* Swap button */}
+          {/* Via-point section */}
           <div className="flex items-center gap-2">
             <div className="flex-1 border-t border-gray-100" />
-            <button
-              type="button"
-              onClick={handleSwap}
-              title="Swap start and end"
-              aria-label="Swap start and end locations"
-              className="flex-shrink-0 w-7 h-7 flex items-center justify-center rounded-full border border-gray-200 bg-white text-gray-400 hover:text-gray-700 hover:border-gray-300 transition-colors text-sm"
-            >
-              ⇅
-            </button>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={handleSwap}
+                title="Swap start and end"
+                aria-label="Swap start and end locations"
+                className="w-7 h-7 flex items-center justify-center rounded-full border border-gray-200 bg-white text-gray-400 hover:text-gray-700 hover:border-gray-300 transition-colors text-sm"
+              >
+                ⇅
+              </button>
+              {viaPlace === null && (
+                <button
+                  type="button"
+                  onClick={() => setViaPlace({ text: "" })}
+                  title="Add a via-point (route through a specific location)"
+                  className="w-7 h-7 flex items-center justify-center rounded-full border border-dashed border-gray-300 bg-white text-gray-400 hover:text-emerald-600 hover:border-emerald-400 transition-colors text-base leading-none"
+                >
+                  +
+                </button>
+              )}
+            </div>
             <div className="flex-1 border-t border-gray-100" />
           </div>
+
+          {/* Via-point input (shown when added) */}
+          {viaPlace !== null && (
+            <div className="relative">
+              <PlaceAutocomplete
+                id="via"
+                label="Via (optional stop)"
+                placeholder="e.g. Riverside Park"
+                value={viaPlace}
+                onChange={setViaPlace}
+              />
+              <button
+                type="button"
+                onClick={() => setViaPlace(null)}
+                aria-label="Remove via stop"
+                className="absolute right-2 top-1 text-gray-300 hover:text-red-400 transition-colors text-lg leading-none font-bold"
+                title="Remove via stop"
+              >
+                ×
+              </button>
+            </div>
+          )}
 
           <PlaceAutocomplete
             id="end"

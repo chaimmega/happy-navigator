@@ -12,8 +12,8 @@ function fmtDist(m: number, metric: boolean): string {
     const km = m / 1000;
     return km < 0.1 ? "< 0.1 km" : `${km.toFixed(1)} km`;
   }
-  const miles = m / 1609.344;
-  return miles < 0.1 ? "< 0.1 mi" : `${miles.toFixed(1)} mi`;
+  const mi = m / 1609.344;
+  return mi < 0.1 ? "< 0.1 mi" : `${mi.toFixed(1)} mi`;
 }
 
 function fmtTime(s: number): string {
@@ -26,8 +26,94 @@ function fmtTime(s: number): string {
 }
 
 function fmtElev(gainM: number, metric: boolean): string {
-  if (metric) return `↑ ${Math.round(gainM)} m`;
-  return `↑ ${Math.round(gainM * 3.28084)} ft`;
+  return metric ? `↑ ${Math.round(gainM)} m` : `↑ ${Math.round(gainM * 3.28084)} ft`;
+}
+
+// ─── Calories & CO2 estimates ─────────────────────────────────────────────────
+// Calories: ~8 MET × 70 kg × hours ≈ 560 × hours (moderate cycling)
+// CO2 saved vs car: avg petrol car ≈ 120 g CO₂/km
+
+function estimateCalories(durationS: number): number {
+  return Math.round(560 * (durationS / 3600));
+}
+
+function estimateCO2Saved(distanceM: number): string {
+  const grams = Math.round((distanceM / 1000) * 120);
+  return grams >= 1000 ? `${(grams / 1000).toFixed(1)} kg` : `${grams} g`;
+}
+
+// ─── Route type label ─────────────────────────────────────────────────────────
+
+function getRouteTypeLabel(route: ScoredRoute, allRoutes: ScoredRoute[]): string | null {
+  if (allRoutes.length < 2) return null;
+
+  const shortestId = allRoutes.reduce((a, b) => (a.distance < b.distance ? a : b)).id;
+
+  const withElev = allRoutes.filter((r) => r.elevationGainM != null);
+  const flattestId =
+    withElev.length > 1
+      ? withElev.reduce((a, b) => ((a.elevationGainM ?? Infinity) < (b.elevationGainM ?? Infinity) ? a : b)).id
+      : null;
+
+  // Prioritise flattest → then shortest
+  if (flattestId !== null && route.id === flattestId) return "Flattest";
+  if (route.id === shortestId) return "Shortest";
+  return null;
+}
+
+// ─── Route comparison strip ───────────────────────────────────────────────────
+
+function ComparisonStrip({
+  routes,
+  selectedRouteId,
+  bestRouteId,
+  onSelect,
+  useMetric,
+}: {
+  routes: ScoredRoute[];
+  selectedRouteId: number;
+  bestRouteId: number;
+  onSelect: (id: number) => void;
+  useMetric: boolean;
+}) {
+  if (routes.length < 2) return null;
+  return (
+    <div className="grid gap-1.5 mb-3" style={{ gridTemplateColumns: `repeat(${routes.length}, 1fr)` }}>
+      {routes.map((r, i) => {
+        const color = ROUTE_COLORS[i % ROUTE_COLORS.length];
+        const isSelected = r.id === selectedRouteId;
+        const isBest = r.id === bestRouteId;
+        const typeLabel = getRouteTypeLabel(r, routes);
+        return (
+          <button
+            key={r.id}
+            type="button"
+            onClick={() => onSelect(r.id)}
+            className={`rounded-lg p-2 text-center transition-all border-2 ${
+              isSelected ? "bg-white shadow-sm" : "bg-gray-50 border-transparent hover:bg-white"
+            }`}
+            style={isSelected ? { borderColor: color } : {}}
+          >
+            <div className="text-xs font-semibold text-gray-700 truncate">{ROUTE_LABELS[i]}</div>
+            <div
+              className="text-lg font-bold leading-tight mt-0.5"
+              style={{ color }}
+            >
+              {r.happyScore}
+            </div>
+            <div className="text-[9px] text-gray-400 mt-0.5 truncate">
+              {fmtDist(r.distance, useMetric)}
+            </div>
+            {(isBest || typeLabel) && (
+              <div className="mt-0.5 text-[9px] font-bold truncate" style={{ color }}>
+                {isBest ? "Happiest ★" : typeLabel}
+              </div>
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
 }
 
 // ─── GPX export ───────────────────────────────────────────────────────────────
@@ -64,7 +150,11 @@ ${trackPoints}
 
 // ─── Score breakdown bar ──────────────────────────────────────────────────────
 
-const BREAKDOWN_SEGMENTS: { key: keyof Omit<ScoreBreakdown, "roughSurface" | "elevation" | "hostileRoad">; color: string; label: string }[] = [
+const BREAKDOWN_SEGMENTS: {
+  key: keyof Omit<ScoreBreakdown, "roughSurface" | "elevation" | "hostileRoad">;
+  color: string;
+  label: string;
+}[] = [
   { key: "parks",          color: "bg-emerald-400", label: "Parks" },
   { key: "cycleways",      color: "bg-violet-400",  label: "Cycleways" },
   { key: "water",          color: "bg-sky-400",     label: "Water" },
@@ -95,14 +185,14 @@ function ScoreBar({ breakdown, total }: { breakdown: ScoreBreakdown; total: numb
         })}
       </div>
       <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1">
-        {BREAKDOWN_SEGMENTS
-          .filter(({ key }) => breakdown[key] > 0 && key !== "base")
-          .map(({ key, color, label }) => (
+        {BREAKDOWN_SEGMENTS.filter(({ key }) => breakdown[key] > 0 && key !== "base").map(
+          ({ key, color, label }) => (
             <span key={key} className="flex items-center gap-1 text-[10px] text-gray-400">
               <span className={`w-2 h-2 rounded-full ${color} inline-block`} />
               {label} +{breakdown[key]}
             </span>
-          ))}
+          )
+        )}
         {breakdown.roughSurface > 0 && (
           <span className="flex items-center gap-1 text-[10px] text-orange-500">
             <span className="w-2 h-2 rounded-full bg-orange-400 inline-block" />
@@ -126,14 +216,12 @@ function ScoreBar({ breakdown, total }: { breakdown: ScoreBreakdown; total: numb
   );
 }
 
-// ─── Signal badges ────────────────────────────────────────────────────────────
+// ─── Signal badge ─────────────────────────────────────────────────────────────
 
 function Badge({ show, bg, label }: { show: boolean; bg: string; label: string }) {
   if (!show) return null;
   return (
-    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${bg}`}>
-      {label}
-    </span>
+    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${bg}`}>{label}</span>
   );
 }
 
@@ -168,9 +256,7 @@ export default function RoutePanel({
       <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4">
         <div className="flex items-center gap-2 mb-1">
           <span className="text-xl" aria-hidden>🌿</span>
-          <h2 className="font-bold text-emerald-900 text-base leading-tight">
-            Happy Route Found!
-          </h2>
+          <h2 className="font-bold text-emerald-900 text-base leading-tight">Happy Route Found!</h2>
         </div>
 
         <p className="text-xs text-emerald-700 mb-3 leading-snug">
@@ -213,6 +299,15 @@ export default function RoutePanel({
         )}
       </div>
 
+      {/* ── Route comparison strip (2+ routes) ── */}
+      <ComparisonStrip
+        routes={routes}
+        selectedRouteId={selectedRouteId}
+        bestRouteId={bestRouteId}
+        onSelect={onSelectRoute}
+        useMetric={useMetric}
+      />
+
       {/* ── Route cards ── */}
       <div className="space-y-2">
         <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest px-1">
@@ -223,6 +318,9 @@ export default function RoutePanel({
           const isSelected = route.id === selectedRouteId;
           const isBest = route.id === bestRouteId;
           const color = ROUTE_COLORS[i % ROUTE_COLORS.length];
+          const typeLabel = getRouteTypeLabel(route, routes);
+          const calories = estimateCalories(route.duration);
+          const co2 = estimateCO2Saved(route.distance);
 
           return (
             <button
@@ -237,7 +335,7 @@ export default function RoutePanel({
               }`}
               style={isSelected ? { borderColor: color } : {}}
             >
-              {/* Header row */}
+              {/* Header */}
               <div className="flex items-start justify-between gap-2">
                 <div className="flex items-center gap-2 min-w-0">
                   <div
@@ -252,17 +350,26 @@ export default function RoutePanel({
                       Happy Route ★
                     </span>
                   )}
+                  {!isBest && typeLabel && (
+                    <span className="text-[10px] font-bold bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full whitespace-nowrap flex-shrink-0">
+                      {typeLabel}
+                    </span>
+                  )}
                 </div>
                 <HappyScore score={route.happyScore} size="sm" />
               </div>
 
-              {/* Stats row */}
-              <div className="mt-2 flex flex-wrap gap-3 text-xs text-gray-500">
+              {/* Stats */}
+              <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-500">
                 <span>📏 {fmtDist(route.distance, useMetric)}</span>
                 <span>⏱ {fmtTime(route.duration)}</span>
                 {route.elevationGainM != null && (
                   <span className="text-amber-600">{fmtElev(route.elevationGainM, useMetric)}</span>
                 )}
+                <span title="Estimated calories burned (70 kg rider)">🔥 ~{calories} kcal</span>
+                <span title="CO₂ saved vs driving a petrol car" className="text-emerald-600">
+                  🌱 saves ~{co2} CO₂
+                </span>
               </div>
 
               {/* Score breakdown bar */}
@@ -283,12 +390,9 @@ export default function RoutePanel({
                 {route.signals.partial && (
                   <Badge show bg="bg-gray-100 text-gray-400" label="~ partial data" />
                 )}
-                {!route.signals.parkCount &&
-                  !route.signals.waterCount &&
-                  !route.signals.cyclewayCount &&
-                  !route.signals.greenCount &&
-                  !route.signals.litCount &&
-                  !route.signals.segregatedCount &&
+                {!route.signals.parkCount && !route.signals.waterCount &&
+                  !route.signals.cyclewayCount && !route.signals.greenCount &&
+                  !route.signals.litCount && !route.signals.segregatedCount &&
                   !route.signals.friendlyRoadCount && (
                     <span className="text-xs text-gray-400 italic">
                       No nearby green/cycle features found
@@ -296,21 +400,18 @@ export default function RoutePanel({
                   )}
               </div>
 
-              {/* GPX export (only on selected route) */}
+              {/* GPX export */}
               {isSelected && (
                 <div className="mt-2.5 pt-2.5 border-t border-gray-100">
                   <button
                     type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      exportGPX(route, startName, endName);
-                    }}
+                    onClick={(e) => { e.stopPropagation(); exportGPX(route, startName, endName); }}
                     className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-emerald-600 transition-colors font-medium"
                   >
                     <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                     </svg>
-                    Export GPX
+                    Export GPX for Garmin / Wahoo
                   </button>
                 </div>
               )}
