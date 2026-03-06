@@ -7,6 +7,7 @@ export const runtime = "nodejs";
 import { geocode } from "../../lib/nominatim";
 import { getBikeRoutes } from "../../lib/osrm";
 import { getHappinessSignals } from "../../lib/overpass";
+import { getRouteElevation } from "../../lib/elevation";
 import { computeHappyScore } from "../../lib/happiness";
 import { parseGoogleMapsUrl } from "../../lib/parseGoogleMapsUrl";
 import type { NavigateRequest, ScoredRoute, AIExplanation } from "../../types";
@@ -34,6 +35,10 @@ async function callAI(routes: ScoredRoute[]): Promise<AIExplanation | null> {
     water: r.signals.waterCount,
     cycleways: r.signals.cyclewayCount,
     greenSpaces: r.signals.greenCount,
+    litSegments: r.signals.litCount,
+    separatedTracks: r.signals.segregatedCount,
+    roughSurfaces: r.signals.roughSurfaceCount,
+    elevationGainM: r.elevationGainM ?? null,
     partialData: r.signals.partial,
   }));
 
@@ -42,11 +47,11 @@ async function callAI(routes: ScoredRoute[]): Promise<AIExplanation | null> {
 Here are the candidate routes, scored automatically from OpenStreetMap data:
 ${JSON.stringify(summary, null, 2)}
 
-The Happy Score (0–100) reflects nearby parks, water features, dedicated cycleways, and green spaces per km.
+The Happy Score (0–100) reflects nearby parks, water features, dedicated cycleways, green spaces, street lighting, and physically separated cycle tracks per km — minus penalties for rough surfaces and steep elevation gain.
 
 Task:
 1. Confirm or select the best "Happy Route" (highest score is a good default, but use judgement).
-2. Write 2–4 short, friendly, specific bullet points explaining WHY it's the happy route.
+2. Write 2–4 short, friendly, specific bullet points explaining WHY it's the happy route (mention lighting, surface quality, or elevation if notable).
 3. If the data suggests interesting stops (parks, riverside, café areas), add 1–3 "suggestedStops".
 
 Respond with ONLY valid JSON — no markdown fences, no extra text:
@@ -208,17 +213,21 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // ── 3. Score each route (parallel Overpass queries) ────────────────────────
-  console.log(`[navigate] scoring ${osrmRoutes.length} route(s) via Overpass…`);
+  // ── 3. Score each route (parallel Overpass + elevation queries) ─────────────
+  console.log(`[navigate] scoring ${osrmRoutes.length} route(s) via Overpass + elevation…`);
   const scoredRoutes: ScoredRoute[] = await Promise.all(
     osrmRoutes.map(async (route, i) => {
-      const signals = await getHappinessSignals(route.geometry.coordinates);
+      const [signals, elevResult] = await Promise.all([
+        getHappinessSignals(route.geometry.coordinates),
+        getRouteElevation(route.geometry.coordinates),
+      ]);
       const distanceKm = route.distance / 1000;
       const { score: happyScore, breakdown: scoreBreakdown } = computeHappyScore(
         signals,
-        distanceKm
+        distanceKm,
+        elevResult?.gainM
       );
-      console.log(`[navigate] route ${i}: score=${happyScore}, signals=`, signals);
+      console.log(`[navigate] route ${i}: score=${happyScore}, elevGain=${elevResult?.gainM ?? "n/a"}m, signals=`, signals);
       return {
         id: i,
         geometry: route.geometry.coordinates,
@@ -227,6 +236,8 @@ export async function POST(req: NextRequest) {
         signals,
         happyScore,
         scoreBreakdown,
+        elevationGainM: elevResult?.gainM,
+        elevationPoints: elevResult?.elevationPoints,
       };
     })
   );
@@ -248,13 +259,20 @@ export async function POST(req: NextRequest) {
   // Shorten display names to "Place, City" style
   const shorten = (name: string) => name.split(",").slice(0, 2).join(",").trim();
 
-  return NextResponse.json({
-    routes: scoredRoutes,
-    bestRouteId,
-    explanation,
-    startCoords: { lat: startGeo.lat, lng: startGeo.lng },
-    endCoords: { lat: endGeo.lat, lng: endGeo.lng },
-    startName: shorten(startGeo.displayName),
-    endName: shorten(endGeo.displayName),
-  });
+  return NextResponse.json(
+    {
+      routes: scoredRoutes,
+      bestRouteId,
+      explanation,
+      startCoords: { lat: startGeo.lat, lng: startGeo.lng },
+      endCoords: { lat: endGeo.lat, lng: endGeo.lng },
+      startName: shorten(startGeo.displayName),
+      endName: shorten(endGeo.displayName),
+    },
+    {
+      headers: {
+        "Cache-Control": "public, max-age=3600, stale-while-revalidate=86400",
+      },
+    }
+  );
 }

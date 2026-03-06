@@ -6,7 +6,7 @@ const OVERPASS_URL = "https://overpass-api.de/api/interpreter";
  * Evenly sample up to `maxPoints` coordinates from a polyline,
  * always including the first AND last point so the full route is represented.
  */
-function sampleCoords(
+export function sampleCoords(
   coords: [number, number][],
   maxPoints = 6
 ): [number, number][] {
@@ -25,6 +25,9 @@ function sampleCoords(
  *   - Green land-use (forest, grass, meadow)
  *   - Water (natural + waterway)
  *   - Cycleways / bike infrastructure
+ *   - Lit roads (street lighting)
+ *   - Segregated cycle tracks (physically separated from traffic)
+ *   - Rough surfaces (gravel, dirt, cobblestone — comfort penalty)
  */
 function buildQuery(points: [number, number][], radiusM = 200): string {
   // Overpass multi-around syntax: around:radius,lat1,lng1,lat2,lng2,...
@@ -44,9 +47,16 @@ function buildQuery(points: [number, number][], radiusM = 200): string {
   way["highway"="cycleway"](${around});
   way["cycleway"~"^(lane|track|shared_lane|opposite_lane)$"](${around});
   node["cycleway"~"^(lane|track)$"](${around});
+  way["lit"="yes"](${around});
+  way["cycleway"="track"](${around});
+  way["surface"~"^(gravel|dirt|cobblestone|sand|unpaved|earth|mud|grass|compacted)$"](${around});
 );
 out tags qt;`;
 }
+
+const ROUGH_SURFACES = new Set([
+  "gravel", "dirt", "cobblestone", "sand", "unpaved", "earth", "mud", "grass", "compacted",
+]);
 
 /**
  * Query OSM via Overpass for happiness signals along a route.
@@ -68,7 +78,7 @@ export async function getHappinessSignals(
 
     if (!resp.ok) {
       console.warn("[overpass] HTTP error:", resp.status);
-      return { parkCount: 0, waterCount: 0, cyclewayCount: 0, greenCount: 0, partial: true };
+      return { parkCount: 0, waterCount: 0, cyclewayCount: 0, greenCount: 0, litCount: 0, segregatedCount: 0, roughSurfaceCount: 0, partial: true };
     }
 
     const data: { elements: Array<{ tags?: Record<string, string> }> } =
@@ -79,6 +89,9 @@ export async function getHappinessSignals(
     let waterCount = 0;
     let cyclewayCount = 0;
     let greenCount = 0;
+    let litCount = 0;
+    let segregatedCount = 0;
+    let roughSurfaceCount = 0;
 
     for (const el of elements) {
       const t = el.tags ?? {};
@@ -99,11 +112,18 @@ export async function getHappinessSignals(
       if (t.natural === "water" || t.waterway) waterCount++;
 
       if (t.highway === "cycleway" || t.cycleway) cyclewayCount++;
+
+      if (t.lit === "yes") litCount++;
+
+      // cycleway=track = physically separated from road traffic (highest quality)
+      if (t.cycleway === "track") segregatedCount++;
+
+      if (t.surface && ROUGH_SURFACES.has(t.surface)) roughSurfaceCount++;
     }
 
-    return { parkCount, waterCount, cyclewayCount, greenCount, partial: false };
+    return { parkCount, waterCount, cyclewayCount, greenCount, litCount, segregatedCount, roughSurfaceCount, partial: false };
   } catch (err) {
     console.warn("[overpass] request failed (degrading gracefully):", err);
-    return { parkCount: 0, waterCount: 0, cyclewayCount: 0, greenCount: 0, partial: true };
+    return { parkCount: 0, waterCount: 0, cyclewayCount: 0, greenCount: 0, litCount: 0, segregatedCount: 0, roughSurfaceCount: 0, partial: true };
   }
 }

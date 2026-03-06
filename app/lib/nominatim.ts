@@ -34,7 +34,11 @@ async function forwardGeocode(address: string): Promise<GeocodedLocation | null>
   const url = `${NOMINATIM_BASE}/search?q=${encodeURIComponent(address)}&format=json&limit=1&addressdetails=0`;
 
   try {
-    const resp = await fetch(url, { headers: HEADERS, signal: AbortSignal.timeout(8000) });
+    const resp = await fetch(url, {
+      headers: HEADERS,
+      signal: AbortSignal.timeout(8000),
+      next: { revalidate: 3600 }, // geocoded addresses rarely change
+    } as RequestInit);
     if (!resp.ok) {
       console.error("[nominatim] HTTP error:", resp.status);
       return null;
@@ -56,7 +60,11 @@ async function reverseGeocode(lat: number, lng: number): Promise<GeocodedLocatio
   const url = `${NOMINATIM_BASE}/reverse?lat=${lat}&lon=${lng}&format=json`;
 
   try {
-    const resp = await fetch(url, { headers: HEADERS, signal: AbortSignal.timeout(8000) });
+    const resp = await fetch(url, {
+      headers: HEADERS,
+      signal: AbortSignal.timeout(8000),
+      next: { revalidate: 3600 },
+    } as RequestInit);
     if (!resp.ok) {
       console.error("[nominatim] reverse HTTP error:", resp.status);
       return null;

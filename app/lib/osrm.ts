@@ -27,7 +27,8 @@ export async function getBikeRoutes(
 
   const resp = await fetch(url, {
     signal: AbortSignal.timeout(15000),
-  });
+    next: { revalidate: 7200 }, // road network rarely changes within 2 hours
+  } as RequestInit);
 
   if (!resp.ok) {
     throw new Error(`OSRM responded with HTTP ${resp.status}`);

@@ -2,6 +2,7 @@
 
 import type { ScoredRoute, AIExplanation, ScoreBreakdown } from "../types";
 import HappyScore from "./HappyScore";
+import ElevationProfile from "./ElevationProfile";
 import { ROUTE_COLORS, ROUTE_LABELS } from "../lib/constants";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -22,11 +23,13 @@ function fmtTime(s: number): string {
 // ─── Score breakdown bar ──────────────────────────────────────────────────────
 
 const BREAKDOWN_SEGMENTS = [
-  { key: "parks" as const, color: "bg-emerald-400", label: "Parks" },
-  { key: "cycleways" as const, color: "bg-violet-400", label: "Cycleways" },
-  { key: "water" as const, color: "bg-sky-400", label: "Water" },
-  { key: "green" as const, color: "bg-lime-400", label: "Green" },
-  { key: "base" as const, color: "bg-gray-300", label: "Base" },
+  { key: "parks" as const,     color: "bg-emerald-400", label: "Parks" },
+  { key: "cycleways" as const, color: "bg-violet-400",  label: "Cycleways" },
+  { key: "water" as const,     color: "bg-sky-400",     label: "Water" },
+  { key: "green" as const,     color: "bg-lime-400",    label: "Green" },
+  { key: "segregated" as const,color: "bg-cyan-400",    label: "Separated" },
+  { key: "lit" as const,       color: "bg-amber-400",   label: "Lit" },
+  { key: "base" as const,      color: "bg-gray-300",    label: "Base" },
 ] as const;
 
 function ScoreBar({ breakdown, total }: { breakdown: ScoreBreakdown; total: number }) {
@@ -55,6 +58,19 @@ function ScoreBar({ breakdown, total }: { breakdown: ScoreBreakdown; total: numb
               {label} {breakdown[key]} pts
             </span>
           )
+        )}
+        {/* Penalty indicators */}
+        {breakdown.roughSurface > 0 && (
+          <span className="flex items-center gap-1 text-[10px] text-orange-500">
+            <span className="w-2 h-2 rounded-full bg-orange-400 inline-block" />
+            Rough −{breakdown.roughSurface} pts
+          </span>
+        )}
+        {breakdown.elevation > 0 && (
+          <span className="flex items-center gap-1 text-[10px] text-red-400">
+            <span className="w-2 h-2 rounded-full bg-red-400 inline-block" />
+            Hilly −{breakdown.elevation} pts
+          </span>
         )}
       </div>
     </div>
@@ -101,6 +117,8 @@ export default function RoutePanel({
   startName,
   endName,
 }: RoutePanelProps) {
+  const selectedRoute = routes.find((r) => r.id === selectedRouteId);
+
   return (
     <div className="space-y-5">
       {/* ── Happy Route summary card ── */}
@@ -204,6 +222,9 @@ export default function RoutePanel({
               <div className="mt-2 flex gap-3 text-xs text-gray-500">
                 <span>📏 {fmtDist(route.distance)}</span>
                 <span>⏱ {fmtTime(route.duration)}</span>
+                {route.elevationGainM != null && (
+                  <span className="text-amber-600">↑ {Math.round(route.elevationGainM)} m</span>
+                )}
               </div>
 
               {/* Score breakdown bar */}
@@ -231,13 +252,30 @@ export default function RoutePanel({
                   bg="bg-lime-100 text-lime-700"
                   label={`🌿 ${route.signals.greenCount} green`}
                 />
+                <Badge
+                  show={route.signals.litCount > 0}
+                  bg="bg-amber-100 text-amber-700"
+                  label={`💡 ${route.signals.litCount} lit`}
+                />
+                <Badge
+                  show={route.signals.segregatedCount > 0}
+                  bg="bg-cyan-100 text-cyan-700"
+                  label={`🛤️ ${route.signals.segregatedCount} separated`}
+                />
+                <Badge
+                  show={route.signals.roughSurfaceCount > 0}
+                  bg="bg-orange-100 text-orange-700"
+                  label={`⚠️ ${route.signals.roughSurfaceCount} rough`}
+                />
                 {route.signals.partial && (
                   <Badge show bg="bg-gray-100 text-gray-400" label="~ partial data" />
                 )}
                 {!route.signals.parkCount &&
                   !route.signals.waterCount &&
                   !route.signals.cyclewayCount &&
-                  !route.signals.greenCount && (
+                  !route.signals.greenCount &&
+                  !route.signals.litCount &&
+                  !route.signals.segregatedCount && (
                     <span className="text-xs text-gray-400 italic">
                       No nearby green/cycle features found
                     </span>
@@ -247,6 +285,15 @@ export default function RoutePanel({
           );
         })}
       </div>
+
+      {/* ── Elevation profile for selected route ── */}
+      {selectedRoute?.elevationPoints && selectedRoute.elevationPoints.length >= 2 && selectedRoute.elevationGainM != null && (
+        <ElevationProfile
+          points={selectedRoute.elevationPoints}
+          gainM={selectedRoute.elevationGainM}
+          distanceKm={selectedRoute.distance / 1000}
+        />
+      )}
     </div>
   );
 }

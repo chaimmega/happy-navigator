@@ -9,17 +9,24 @@ export interface HappinessSignals {
   waterCount: number;
   cyclewayCount: number;
   greenCount: number;
+  litCount: number;         // ways with lit=yes (street lighting)
+  segregatedCount: number;  // ways with cycleway=track (physically separated)
+  roughSurfaceCount: number; // ways with gravel/dirt/cobblestone etc.
   /** true when Overpass timed out / errored — scores are estimated */
   partial: boolean;
 }
 
 /** Per-category score contributions, each capped at their max */
 export interface ScoreBreakdown {
-  parks: number;     // 0–30
-  cycleways: number; // 0–25
-  water: number;     // 0–20
-  green: number;     // 0–15
-  base: number;      // always 10
+  parks: number;        // 0–30
+  cycleways: number;    // 0–25
+  water: number;        // 0–20
+  green: number;        // 0–15
+  lit: number;          // 0–10
+  segregated: number;   // 0–15
+  base: number;         // always 5
+  roughSurface: number; // 0–15 (penalty magnitude, subtracted from score)
+  elevation: number;    // 0–20 (penalty magnitude, subtracted from score)
 }
 
 /** A route from OSRM, enriched with happiness data */
@@ -32,6 +39,8 @@ export interface ScoredRoute {
   signals: HappinessSignals;
   happyScore: number; // 0–100
   scoreBreakdown: ScoreBreakdown;
+  elevationGainM?: number;    // total ascent in metres (undefined if API unavailable)
+  elevationPoints?: number[]; // sampled elevation values in metres for profile chart
 }
 
 export interface AIExplanation {

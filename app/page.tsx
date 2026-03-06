@@ -20,7 +20,7 @@ const MapView = dynamic(() => import("./components/MapView"), {
 const LOADING_STEPS = [
   { label: "Geocoding your locations…", icon: "📍" },
   { label: "Fetching bike route alternatives…", icon: "🛤️" },
-  { label: "Scanning parks, water & cycleways…", icon: "🌿" },
+  { label: "Scanning parks, cycleways & surfaces…", icon: "🌿" },
   { label: "AI is finding your happiest route…", icon: "✨" },
 ];
 
@@ -98,8 +98,8 @@ function MapPlaceholder() {
         Enter locations to find your happy route
       </p>
       <p className="text-sm mt-1.5 text-gray-400 text-center max-w-xs leading-relaxed">
-        We score each route by nearby parks, cycleways, water, and green spaces
-        — then ask AI to explain why one is happiest.
+        We score each route by nearby parks, cycleways, water, lighting, and
+        surface quality — then ask AI to explain why one is happiest.
       </p>
     </div>
   );
@@ -146,8 +146,16 @@ export default function Home() {
         return;
       }
 
-      setResult(json as NavigateResponse);
-      setSelectedRouteId((json as NavigateResponse).bestRouteId);
+      const nav = json as NavigateResponse;
+      setResult(nav);
+      setSelectedRouteId(nav.bestRouteId);
+
+      // Update URL so the search is shareable — coords are the canonical form
+      const params = new URLSearchParams({
+        from: `${nav.startCoords.lat},${nav.startCoords.lng}`,
+        to:   `${nav.endCoords.lat},${nav.endCoords.lng}`,
+      });
+      window.history.replaceState(null, "", `?${params.toString()}`);
     } catch (err) {
       // AbortError means a newer search superseded this one — silently discard
       if (err instanceof Error && err.name === "AbortError") return;
@@ -157,6 +165,26 @@ export default function Home() {
       if (!controller.signal.aborted) setLoading(false);
     }
   };
+
+  // Auto-search from URL params on first load (handles shareable links)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const from = params.get("from");
+    const to   = params.get("to");
+    if (!from || !to) return;
+
+    const [fromLat, fromLng] = from.split(",").map(Number);
+    const [toLat, toLng]     = to.split(",").map(Number);
+    if (isNaN(fromLat) || isNaN(fromLng) || isNaN(toLat) || isNaN(toLng)) return;
+
+    handleSubmit({
+      start: from,
+      end:   to,
+      startCoords: { lat: fromLat, lng: fromLng },
+      endCoords:   { lat: toLat,   lng: toLng   },
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // intentionally run once on mount
 
   return (
     // h-screen + overflow-hidden gives flex children a defined height
