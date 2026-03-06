@@ -12,7 +12,32 @@ import { computeHappyScore } from "../../lib/happiness";
 import { parseGoogleMapsUrl } from "../../lib/parseGoogleMapsUrl";
 import type { NavigateRequest, ScoredRoute, AIExplanation } from "../../types";
 
-// Lazy singleton — avoids re-instantiating on every request in local dev
+// ─── Simple in-memory rate limiter (5 requests/min per IP) ───────────────────
+
+const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
+
+function isRateLimited(ip: string): boolean {
+  const now = Date.now();
+  const entry = rateLimitMap.get(ip);
+  if (!entry || now > entry.resetAt) {
+    rateLimitMap.set(ip, { count: 1, resetAt: now + 60_000 });
+    return false;
+  }
+  if (entry.count >= 10) return true;
+  entry.count++;
+  return false;
+}
+
+// Prune stale entries periodically to avoid memory leaks
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, entry] of rateLimitMap) {
+    if (now > entry.resetAt) rateLimitMap.delete(ip);
+  }
+}, 5 * 60_000);
+
+// ─── Anthropic client singleton ───────────────────────────────────────────────
+
 let _anthropic: Anthropic | null = null;
 function getAnthropicClient(): Anthropic {
   if (!_anthropic) {
@@ -21,9 +46,13 @@ function getAnthropicClient(): Anthropic {
   return _anthropic;
 }
 
-// ─── AI helper ───────────────────────────────────────────────────────────────
+// ─── AI helper ────────────────────────────────────────────────────────────────
 
-async function callAI(routes: ScoredRoute[]): Promise<AIExplanation | null> {
+async function callAI(
+  routes: ScoredRoute[],
+  startName: string,
+  endName: string
+): Promise<AIExplanation | null> {
   const provider = process.env.AI_PROVIDER ?? "anthropic";
 
   const summary = routes.slice(0, 3).map((r) => ({
@@ -37,6 +66,9 @@ async function callAI(routes: ScoredRoute[]): Promise<AIExplanation | null> {
     greenSpaces: r.signals.greenCount,
     litSegments: r.signals.litCount,
     separatedTracks: r.signals.segregatedCount,
+    friendlyRoads: r.signals.friendlyRoadCount,
+    trafficCalming: r.signals.trafficCalmingCount,
+    hostileRoads: r.signals.hostileRoadCount,
     roughSurfaces: r.signals.roughSurfaceCount,
     elevationGainM: r.elevationGainM ?? null,
     partialData: r.signals.partial,
@@ -44,15 +76,17 @@ async function callAI(routes: ScoredRoute[]): Promise<AIExplanation | null> {
 
   const prompt = `You are a friendly cycling route advisor helping someone find their happiest bike route.
 
-Here are the candidate routes, scored automatically from OpenStreetMap data:
+Route: ${startName} → ${endName}
+
+Candidate routes scored from OpenStreetMap data:
 ${JSON.stringify(summary, null, 2)}
 
-The Happy Score (0–100) reflects nearby parks, water features, dedicated cycleways, green spaces, street lighting, and physically separated cycle tracks per km — minus penalties for rough surfaces and steep elevation gain.
+The Happy Score (0–100) reflects: parks, water features, dedicated cycleways, green spaces, street lighting, separated cycle tracks, and friendly roads (living streets, bicycle roads) per km — minus penalties for hostile traffic roads, rough surfaces, and steep elevation gain.
 
 Task:
-1. Confirm or select the best "Happy Route" (highest score is a good default, but use judgement).
-2. Write 2–4 short, friendly, specific bullet points explaining WHY it's the happy route (mention lighting, surface quality, or elevation if notable).
-3. If the data suggests interesting stops (parks, riverside, café areas), add 1–3 "suggestedStops".
+1. Confirm or select the best "Happy Route" (highest score is a good default, but use judgement based on all factors).
+2. Write 2–4 short, friendly, specific bullet points explaining WHY it's the happy route (mention specific features like lighting, separated lanes, parks, or traffic stress if notable).
+3. If data suggests interesting stops (parks, riverside paths, café areas near the route), add 1–3 "suggestedStops".
 
 Respond with ONLY valid JSON — no markdown fences, no extra text:
 {
@@ -68,9 +102,6 @@ Respond with ONLY valid JSON — no markdown fences, no extra text:
         console.error("[ai] OPENAI_API_KEY is not set");
         return null;
       }
-      // openai is optional — install with: npm install openai
-      // Dynamic import via Function() prevents Next.js from bundling it and
-      // emitting a "module not found" warning when it isn't installed.
       type OpenAIModule = {
         default: new (opts: { apiKey: string }) => {
           chat: {
@@ -82,28 +113,26 @@ Respond with ONLY valid JSON — no markdown fences, no extra text:
           };
         };
       };
-      // eslint-disable-next-line no-new-func
-      const mod = (await new Function("pkg", "return import(pkg)")(
-        "openai"
-      )) as OpenAIModule;
+      const mod = (await new Function("pkg", "return import(pkg)")("openai")) as OpenAIModule;
       const client = new mod.default({ apiKey });
       const res = await client.chat.completions.create({
         model: "gpt-4o-mini",
         max_tokens: 450,
-        temperature: 0.7,
+        temperature: 0.3,
         messages: [{ role: "user", content: prompt }],
       });
-      return JSON.parse(stripFences(res.choices[0].message.content ?? ""));
+      return validateAIResponse(JSON.parse(stripFences(res.choices[0].message.content ?? "")));
     }
 
     // Default: Anthropic
     const msg = await getAnthropicClient().messages.create({
       model: "claude-haiku-4-5-20251001",
       max_tokens: 450,
+      temperature: 0.3,
       messages: [{ role: "user", content: prompt }],
     });
     const text = msg.content[0].type === "text" ? msg.content[0].text : "";
-    return JSON.parse(stripFences(text));
+    return validateAIResponse(JSON.parse(stripFences(text)));
   } catch (err) {
     console.error("[ai] call failed:", err);
     return null;
@@ -117,9 +146,32 @@ function stripFences(text: string): string {
     .trim();
 }
 
+function validateAIResponse(raw: unknown): AIExplanation | null {
+  if (!raw || typeof raw !== "object") return null;
+  const obj = raw as Record<string, unknown>;
+  if (typeof obj.bestRouteId !== "number") return null;
+  if (!Array.isArray(obj.bullets) || obj.bullets.length === 0) return null;
+  return {
+    bestRouteId: obj.bestRouteId,
+    bullets: (obj.bullets as unknown[]).filter((b) => typeof b === "string") as string[],
+    suggestedStops: Array.isArray(obj.suggestedStops)
+      ? (obj.suggestedStops as unknown[]).filter((s) => typeof s === "string") as string[]
+      : [],
+  };
+}
+
 // ─── Route handler ────────────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
+  // Rate limiting
+  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "local";
+  if (isRateLimited(ip)) {
+    return NextResponse.json(
+      { error: "Too many requests. Please wait a minute before trying again." },
+      { status: 429 }
+    );
+  }
+
   let body: NavigateRequest;
   try {
     body = await req.json();
@@ -138,9 +190,7 @@ export async function POST(req: NextRequest) {
       startAddress = parsed.start;
       endAddress = parsed.end;
     } else {
-      console.warn(
-        "[navigate] could not parse Google Maps URL, falling back to manual inputs"
-      );
+      console.warn("[navigate] could not parse Google Maps URL, falling back to manual inputs");
     }
   }
 
@@ -151,7 +201,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // ── 1. Geocode (skip if pre-resolved coords from Photon autocomplete) ──────
+  // ── 1. Geocode ──────────────────────────────────────────────────────────────
   type GeoResult = { lat: number; lng: number; displayName: string };
 
   async function resolveLocation(
@@ -159,7 +209,6 @@ export async function POST(req: NextRequest) {
     preCoords?: { lat: number; lng: number }
   ): Promise<GeoResult | null> {
     if (preCoords) {
-      // Coords already resolved client-side via Photon — use address as display name
       return { lat: preCoords.lat, lng: preCoords.lng, displayName: address };
     }
     return geocode(address);
@@ -173,22 +222,18 @@ export async function POST(req: NextRequest) {
 
   if (!startGeo) {
     return NextResponse.json(
-      {
-        error: `Could not find location: "${startAddress}". Try selecting from the autocomplete suggestions.`,
-      },
+      { error: `Could not find location: "${startAddress}". Try selecting from the autocomplete suggestions.` },
       { status: 400 }
     );
   }
   if (!endGeo) {
     return NextResponse.json(
-      {
-        error: `Could not find location: "${endAddress}". Try selecting from the autocomplete suggestions.`,
-      },
+      { error: `Could not find location: "${endAddress}". Try selecting from the autocomplete suggestions.` },
       { status: 400 }
     );
   }
 
-  // ── 2. Fetch routes from OSRM ──────────────────────────────────────────────
+  // ── 2. Fetch routes from OSRM ───────────────────────────────────────────────
   let osrmRoutes;
   try {
     osrmRoutes = await getBikeRoutes(
@@ -198,10 +243,7 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     console.error("[navigate] OSRM error:", err);
     return NextResponse.json(
-      {
-        error:
-          "Could not fetch routes. The routing service may be temporarily unavailable.",
-      },
+      { error: "Could not fetch routes. The routing service may be temporarily unavailable." },
       { status: 502 }
     );
   }
@@ -213,7 +255,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // ── 3. Score each route (parallel Overpass + elevation queries) ─────────────
+  // ── 3. Score each route (parallel Overpass + elevation) ─────────────────────
   console.log(`[navigate] scoring ${osrmRoutes.length} route(s) via Overpass + elevation…`);
   const scoredRoutes: ScoredRoute[] = await Promise.all(
     osrmRoutes.map(async (route, i) => {
@@ -242,22 +284,21 @@ export async function POST(req: NextRequest) {
     })
   );
 
-  // Sort descending by happy score
   scoredRoutes.sort((a, b) => b.happyScore - a.happyScore);
 
-  // ── 4. AI explanation (single call) ───────────────────────────────────────
-  console.log("[navigate] calling AI for explanation…");
-  const explanation = await callAI(scoredRoutes);
+  // ── 4. AI explanation ───────────────────────────────────────────────────────
+  const shorten = (name: string) => name.split(",").slice(0, 2).join(",").trim();
+  const startName = shorten(startGeo.displayName);
+  const endName   = shorten(endGeo.displayName);
 
-  // Validate bestRouteId from AI; fall back to top-scored route
+  console.log("[navigate] calling AI for explanation…");
+  const explanation = await callAI(scoredRoutes, startName, endName);
+
   const validIds = scoredRoutes.map((r) => r.id);
   const bestRouteId =
     explanation && validIds.includes(explanation.bestRouteId)
       ? explanation.bestRouteId
       : scoredRoutes[0].id;
-
-  // Shorten display names to "Place, City" style
-  const shorten = (name: string) => name.split(",").slice(0, 2).join(",").trim();
 
   return NextResponse.json(
     {
@@ -266,8 +307,8 @@ export async function POST(req: NextRequest) {
       explanation,
       startCoords: { lat: startGeo.lat, lng: startGeo.lng },
       endCoords: { lat: endGeo.lat, lng: endGeo.lng },
-      startName: shorten(startGeo.displayName),
-      endName: shorten(endGeo.displayName),
+      startName,
+      endName,
     },
     {
       headers: {

@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import dynamic from "next/dynamic";
-import SearchForm from "./components/SearchForm";
+import SearchForm, { saveRecentSearch } from "./components/SearchForm";
 import RoutePanel from "./components/RoutePanel";
 import type { NavigateResponse } from "./types";
+import type { PlaceValue } from "./components/PlaceAutocomplete";
 
 const MapView = dynamic(() => import("./components/MapView"), {
   ssr: false,
@@ -18,10 +19,10 @@ const MapView = dynamic(() => import("./components/MapView"), {
 // ─── Animated loading steps ───────────────────────────────────────────────────
 
 const LOADING_STEPS = [
-  { label: "Geocoding your locations…", icon: "📍" },
-  { label: "Fetching bike route alternatives…", icon: "🛤️" },
+  { label: "Geocoding your locations…",           icon: "📍" },
+  { label: "Fetching bike route alternatives…",   icon: "🛤️" },
   { label: "Scanning parks, cycleways & surfaces…", icon: "🌿" },
-  { label: "AI is finding your happiest route…", icon: "✨" },
+  { label: "AI is finding your happiest route…",  icon: "✨" },
 ];
 
 function LoadingSteps({ active }: { active: boolean }) {
@@ -41,7 +42,7 @@ function LoadingSteps({ active }: { active: boolean }) {
     <div className="flex-1 flex flex-col justify-center px-6 gap-4">
       <div className="space-y-2">
         {LOADING_STEPS.map((s, i) => {
-          const done = i < step;
+          const done    = i < step;
           const current = i === step;
           return (
             <div
@@ -52,29 +53,21 @@ function LoadingSteps({ active }: { active: boolean }) {
             >
               <span
                 className={`w-6 h-6 rounded-full flex items-center justify-center text-xs flex-shrink-0 ${
-                  done
-                    ? "bg-emerald-100 text-emerald-600"
-                    : current
-                    ? "bg-emerald-600 text-white"
-                    : "bg-gray-100 text-gray-400"
+                  done ? "bg-emerald-100 text-emerald-600" :
+                  current ? "bg-emerald-600 text-white" : "bg-gray-100 text-gray-400"
                 }`}
               >
                 {done ? "✓" : i + 1}
               </span>
               <span
                 className={
-                  current
-                    ? "text-gray-800 font-medium"
-                    : done
-                    ? "text-gray-400 line-through"
-                    : "text-gray-400"
+                  current ? "text-gray-800 font-medium" :
+                  done    ? "text-gray-400 line-through" : "text-gray-400"
                 }
               >
                 {s.label}
               </span>
-              {current && (
-                <span className="text-base animate-pulse">{s.icon}</span>
-              )}
+              {current && <span className="text-base animate-pulse">{s.icon}</span>}
             </div>
           );
         })}
@@ -91,16 +84,47 @@ function LoadingSteps({ active }: { active: boolean }) {
 function MapPlaceholder() {
   return (
     <div className="h-full flex flex-col items-center justify-center text-gray-400 select-none bg-gray-50">
-      <div className="text-7xl mb-4 opacity-50" aria-hidden>
-        🗺️
-      </div>
-      <p className="text-lg font-semibold text-gray-500">
-        Enter locations to find your happy route
-      </p>
+      <div className="text-7xl mb-4 opacity-50" aria-hidden>🗺️</div>
+      <p className="text-lg font-semibold text-gray-500">Enter locations to find your happy route</p>
       <p className="text-sm mt-1.5 text-gray-400 text-center max-w-xs leading-relaxed">
-        We score each route by nearby parks, cycleways, water, lighting, and
-        surface quality — then ask AI to explain why one is happiest.
+        We score each route by parks, cycleways, water, lighting, surface quality and traffic stress
+        — then ask AI to explain why one is happiest.
       </p>
+    </div>
+  );
+}
+
+// ─── Metric toggle button ─────────────────────────────────────────────────────
+
+function MetricToggle({ useMetric, onToggle }: { useMetric: boolean; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      title={`Switch to ${useMetric ? "imperial" : "metric"} units`}
+      className="hidden sm:flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-gray-700 border border-gray-200 rounded-lg px-2.5 py-1 bg-white hover:bg-gray-50 transition-colors"
+    >
+      <span className={useMetric ? "text-emerald-600 font-bold" : ""}>km</span>
+      <span className="text-gray-300">/</span>
+      <span className={!useMetric ? "text-emerald-600 font-bold" : ""}>mi</span>
+    </button>
+  );
+}
+
+// ─── Map pin mode banner ──────────────────────────────────────────────────────
+
+function PinModeBanner({ target, onCancel }: { target: "start" | "end"; onCancel: () => void }) {
+  return (
+    <div className="flex items-center gap-2 mt-2 px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-lg text-xs text-emerald-700">
+      <span className="animate-pulse">📍</span>
+      <span className="flex-1">Click on the map to set the <strong>{target}</strong> location</span>
+      <button
+        type="button"
+        onClick={onCancel}
+        className="text-emerald-500 hover:text-emerald-700 font-bold leading-none"
+      >
+        ×
+      </button>
     </div>
   );
 }
@@ -108,12 +132,30 @@ function MapPlaceholder() {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function Home() {
-  const [result, setResult] = useState<NavigateResponse | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [result, setResult]               = useState<NavigateResponse | null>(null);
+  const [loading, setLoading]             = useState(false);
+  const [error, setError]                 = useState<string | null>(null);
   const [selectedRouteId, setSelectedRouteId] = useState<number>(0);
-  // Ref to the current in-flight AbortController — lets us cancel stale requests
+  const [useMetric, setUseMetric]         = useState(false);
+  const [mapPinTarget, setMapPinTarget]   = useState<"start" | "end" | null>(null);
+  const [mapPinPlace, setMapPinPlace]     = useState<PlaceValue | undefined>(undefined);
+  const [pinLoading, setPinLoading]       = useState(false);
+
   const abortRef = useRef<AbortController | null>(null);
+
+  // Load saved metric preference
+  useEffect(() => {
+    try {
+      setUseMetric(localStorage.getItem("happynav_metric") === "true");
+    } catch { /* ignore */ }
+  }, []);
+
+  const toggleMetric = () => {
+    setUseMetric((v) => {
+      try { localStorage.setItem("happynav_metric", String(!v)); } catch { /* ignore */ }
+      return !v;
+    });
+  };
 
   const handleSubmit = async (data: {
     start: string;
@@ -122,7 +164,6 @@ export default function Home() {
     endCoords?: { lat: number; lng: number };
     googleMapsUrl?: string;
   }) => {
-    // Cancel any in-flight request from a previous submit
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
@@ -150,23 +191,31 @@ export default function Home() {
       setResult(nav);
       setSelectedRouteId(nav.bestRouteId);
 
-      // Update URL so the search is shareable — coords are the canonical form
+      // Save to recent searches
+      if (nav.startCoords && nav.endCoords) {
+        saveRecentSearch({
+          startName: nav.startName,
+          endName: nav.endName,
+          startCoords: nav.startCoords,
+          endCoords: nav.endCoords,
+        });
+      }
+
+      // Update URL for shareability
       const params = new URLSearchParams({
         from: `${nav.startCoords.lat},${nav.startCoords.lng}`,
         to:   `${nav.endCoords.lat},${nav.endCoords.lng}`,
       });
       window.history.replaceState(null, "", `?${params.toString()}`);
     } catch (err) {
-      // AbortError means a newer search superseded this one — silently discard
       if (err instanceof Error && err.name === "AbortError") return;
       setError("Network error — please check your connection and try again.");
     } finally {
-      // Only clear loading state if this request wasn't superseded
       if (!controller.signal.aborted) setLoading(false);
     }
   };
 
-  // Auto-search from URL params on first load (handles shareable links)
+  // Auto-search from URL params (shareable links)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const from = params.get("from");
@@ -174,7 +223,7 @@ export default function Home() {
     if (!from || !to) return;
 
     const [fromLat, fromLng] = from.split(",").map(Number);
-    const [toLat, toLng]     = to.split(",").map(Number);
+    const [toLat,   toLng]   = to.split(",").map(Number);
     if (isNaN(fromLat) || isNaN(fromLng) || isNaN(toLat) || isNaN(toLng)) return;
 
     handleSubmit({
@@ -183,38 +232,101 @@ export default function Home() {
       startCoords: { lat: fromLat, lng: fromLng },
       endCoords:   { lat: toLat,   lng: toLng   },
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // intentionally run once on mount
 
+  // Handle map click: reverse geocode the point then set as start/end
+  const handleMapClick = useCallback(async (lat: number, lng: number) => {
+    if (!mapPinTarget) return;
+    setPinLoading(true);
+    try {
+      const res = await fetch(`/api/reverse?lat=${lat}&lng=${lng}`);
+      const data: { name: string; lat: number; lng: number } = await res.json();
+      setMapPinPlace({ text: data.name, coords: { lat: data.lat, lng: data.lng } });
+    } catch {
+      setMapPinPlace({
+        text: `${lat.toFixed(5)}, ${lng.toFixed(5)}`,
+        coords: { lat, lng },
+      });
+    } finally {
+      setPinLoading(false);
+      setMapPinTarget(null);
+    }
+  }, [mapPinTarget]);
+
+  const cancelMapPin = () => {
+    setMapPinTarget(null);
+    setMapPinPlace(undefined);
+  };
+
   return (
-    // h-screen + overflow-hidden gives flex children a defined height
-    // so the map div can fill its parent with height:100%
     <main className="h-screen overflow-hidden bg-gray-50 flex flex-col">
       {/* ── Header ── */}
-      <header className="bg-white border-b border-gray-200 px-6 py-3.5 flex items-center gap-3 flex-shrink-0">
-        <span className="text-3xl" aria-hidden>
-          🚴
-        </span>
-        <div>
-          <h1 className="text-lg font-bold text-gray-900 leading-tight">
+      <header className="bg-white border-b border-gray-200 px-4 sm:px-6 py-3 flex items-center gap-3 flex-shrink-0">
+        <span className="text-3xl" aria-hidden>🚴</span>
+        <div className="min-w-0">
+          <h1 className="text-base sm:text-lg font-bold text-gray-900 leading-tight truncate">
             Happy Navigator
           </h1>
-          <p className="text-xs text-gray-400 leading-tight">
+          <p className="text-xs text-gray-400 leading-tight hidden sm:block">
             Score bike routes by parks, cycleways &amp; scenic spots
           </p>
         </div>
-        <div className="ml-auto hidden sm:flex items-center gap-1.5 text-xs text-gray-400">
-          <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block" />
-          Powered by OpenStreetMap + OSRM
+        <div className="ml-auto flex items-center gap-2">
+          <MetricToggle useMetric={useMetric} onToggle={toggleMetric} />
+          {/* Map pin mode buttons — only shown when routes are displayed */}
+          {result && !mapPinTarget && (
+            <div className="hidden md:flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => setMapPinTarget("start")}
+                title="Click map to set start location"
+                className="text-[10px] text-gray-400 hover:text-emerald-600 border border-gray-200 rounded px-1.5 py-1 transition-colors bg-white"
+              >
+                📍 Pin start
+              </button>
+              <button
+                type="button"
+                onClick={() => setMapPinTarget("end")}
+                title="Click map to set end location"
+                className="text-[10px] text-gray-400 hover:text-emerald-600 border border-gray-200 rounded px-1.5 py-1 transition-colors bg-white"
+              >
+                📍 Pin end
+              </button>
+            </div>
+          )}
+          {pinLoading && (
+            <span className="text-xs text-gray-400 animate-pulse">Locating…</span>
+          )}
+          <div className="hidden sm:flex items-center gap-1.5 text-xs text-gray-400">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block" />
+            OpenStreetMap + OSRM
+          </div>
         </div>
       </header>
 
       {/* ── Body: sidebar + map ── */}
-      <div className="flex flex-1 min-h-0">
+      {/* On mobile: flex-col (sidebar on top), on desktop: flex-row */}
+      <div className="flex flex-col md:flex-row flex-1 min-h-0">
+
         {/* Sidebar */}
-        <aside className="w-[22rem] flex-shrink-0 bg-white border-r border-gray-200 flex flex-col min-h-0">
-          <div className="p-5 border-b border-gray-100 flex-shrink-0">
-            <SearchForm onSubmit={handleSubmit} loading={loading} />
+        {/* Mobile: fixed height so map is visible below; scrolls as a unit.
+            Desktop: full height with split-scroll sections. */}
+        <aside className="w-full md:w-[22rem] flex-shrink-0 bg-white border-b md:border-b-0 md:border-r border-gray-200 flex flex-col h-[46vh] md:h-auto overflow-y-auto md:overflow-hidden">
+
+          {/* Search form — always visible */}
+          <div className="p-4 md:p-5 border-b border-gray-100 flex-shrink-0">
+            <SearchForm
+              onSubmit={handleSubmit}
+              loading={loading}
+              mapPinPlace={mapPinPlace}
+              mapPinTarget={mapPinTarget ?? undefined}
+              onClearMapPin={cancelMapPin}
+            />
+
+            {/* Map pin mode banner */}
+            {mapPinTarget && (
+              <PinModeBanner target={mapPinTarget} onCancel={cancelMapPin} />
+            )}
 
             {error && (
               <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700 flex gap-2 items-start">
@@ -237,7 +349,7 @@ export default function Home() {
 
           {/* Results */}
           {result && !loading && (
-            <div className="flex-1 overflow-y-auto p-5 min-h-0 sidebar-scroll">
+            <div className="flex-1 overflow-y-auto p-4 md:p-5 min-h-0 sidebar-scroll">
               <RoutePanel
                 routes={result.routes}
                 selectedRouteId={selectedRouteId}
@@ -246,6 +358,7 @@ export default function Home() {
                 onSelectRoute={setSelectedRouteId}
                 startName={result.startName}
                 endName={result.endName}
+                useMetric={useMetric}
               />
             </div>
           )}
@@ -253,21 +366,17 @@ export default function Home() {
           {/* Idle hint */}
           {!result && !loading && !error && (
             <div className="flex-1 flex flex-col items-center justify-center text-center px-6 gap-2 text-gray-400">
-              <span className="text-4xl" aria-hidden>
-                🛤️
-              </span>
-              <p className="text-sm text-gray-500">
-                Enter a start and end location to begin.
-              </p>
+              <span className="text-4xl" aria-hidden>🛤️</span>
+              <p className="text-sm text-gray-500">Enter a start and end location to begin.</p>
               <p className="text-xs">
-                Try: <em>Battersea Park</em> → <em>Southwark Bridge, London</em>
+                Try: <em>Central Park, New York</em> → <em>Brooklyn Bridge</em>
               </p>
             </div>
           )}
         </aside>
 
-        {/* Map */}
-        <div className="flex-1 min-h-0">
+        {/* Map — flex-1 fills remaining height on desktop; min-h-[200px] on mobile */}
+        <div className={`flex-1 min-h-[200px] md:min-h-0 relative${mapPinTarget ? " map-pin-mode" : ""}`}>
           {result ? (
             <MapView
               routes={result.routes}
@@ -275,6 +384,7 @@ export default function Home() {
               startCoords={result.startCoords}
               endCoords={result.endCoords}
               onSelectRoute={setSelectedRouteId}
+              onMapClick={mapPinTarget ? handleMapClick : undefined}
             />
           ) : (
             <MapPlaceholder />

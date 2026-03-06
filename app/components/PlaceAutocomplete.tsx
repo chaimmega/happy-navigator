@@ -248,7 +248,6 @@ export default function PlaceAutocomplete({
           autoComplete="off"
           spellCheck={false}
           aria-autocomplete="list"
-          aria-expanded={open}
           aria-controls={id ? `${id}-listbox` : undefined}
           aria-activedescendant={
             activeIdx >= 0 && id ? `${id}-option-${activeIdx}` : undefined

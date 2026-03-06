@@ -5,10 +5,15 @@ import HappyScore from "./HappyScore";
 import ElevationProfile from "./ElevationProfile";
 import { ROUTE_COLORS, ROUTE_LABELS } from "../lib/constants";
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// ─── Unit formatting ───────────────────────────────────────────────────────────
 
-function fmtDist(m: number): string {
-  return m < 1000 ? `${Math.round(m)} m` : `${(m / 1000).toFixed(1)} km`;
+function fmtDist(m: number, metric: boolean): string {
+  if (metric) {
+    const km = m / 1000;
+    return km < 0.1 ? "< 0.1 km" : `${km.toFixed(1)} km`;
+  }
+  const miles = m / 1609.344;
+  return miles < 0.1 ? "< 0.1 mi" : `${miles.toFixed(1)} mi`;
 }
 
 function fmtTime(s: number): string {
@@ -20,17 +25,56 @@ function fmtTime(s: number): string {
   return m === 0 ? `${h} h` : `${h} h ${m} min`;
 }
 
+function fmtElev(gainM: number, metric: boolean): string {
+  if (metric) return `↑ ${Math.round(gainM)} m`;
+  return `↑ ${Math.round(gainM * 3.28084)} ft`;
+}
+
+// ─── GPX export ───────────────────────────────────────────────────────────────
+
+function exportGPX(route: ScoredRoute, startName: string, endName: string) {
+  const trackPoints = route.geometry
+    .map(([lng, lat]) => `      <trkpt lat="${lat.toFixed(6)}" lon="${lng.toFixed(6)}"></trkpt>`)
+    .join("\n");
+
+  const gpx = `<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="Happy Navigator" xmlns="http://www.topografix.com/GPX/1/1">
+  <metadata>
+    <name>${startName} to ${endName}</name>
+    <desc>Happy Score: ${route.happyScore}/100</desc>
+  </metadata>
+  <trk>
+    <name>${startName} to ${endName}</name>
+    <trkseg>
+${trackPoints}
+    </trkseg>
+  </trk>
+</gpx>`;
+
+  const blob = new Blob([gpx], { type: "application/gpx+xml" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `happy-route-${route.id + 1}.gpx`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
 // ─── Score breakdown bar ──────────────────────────────────────────────────────
 
-const BREAKDOWN_SEGMENTS = [
-  { key: "parks" as const,     color: "bg-emerald-400", label: "Parks" },
-  { key: "cycleways" as const, color: "bg-violet-400",  label: "Cycleways" },
-  { key: "water" as const,     color: "bg-sky-400",     label: "Water" },
-  { key: "green" as const,     color: "bg-lime-400",    label: "Green" },
-  { key: "segregated" as const,color: "bg-cyan-400",    label: "Separated" },
-  { key: "lit" as const,       color: "bg-amber-400",   label: "Lit" },
-  { key: "base" as const,      color: "bg-gray-300",    label: "Base" },
-] as const;
+const BREAKDOWN_SEGMENTS: { key: keyof Omit<ScoreBreakdown, "roughSurface" | "elevation" | "hostileRoad">; color: string; label: string }[] = [
+  { key: "parks",          color: "bg-emerald-400", label: "Parks" },
+  { key: "cycleways",      color: "bg-violet-400",  label: "Cycleways" },
+  { key: "water",          color: "bg-sky-400",     label: "Water" },
+  { key: "green",          color: "bg-lime-400",    label: "Green" },
+  { key: "segregated",     color: "bg-cyan-400",    label: "Separated" },
+  { key: "friendlyRoad",   color: "bg-teal-400",    label: "Friendly" },
+  { key: "trafficCalming", color: "bg-blue-300",    label: "Calmed" },
+  { key: "lit",            color: "bg-amber-400",   label: "Lit" },
+  { key: "base",           color: "bg-gray-300",    label: "Base" },
+];
 
 function ScoreBar({ breakdown, total }: { breakdown: ScoreBreakdown; total: number }) {
   if (total === 0) return null;
@@ -45,31 +89,36 @@ function ScoreBar({ breakdown, total }: { breakdown: ScoreBreakdown; total: numb
               key={key}
               className={`${color} h-full`}
               style={{ width: `${(val / 100) * 100}%` }}
-              title={`${key}: ${val} pts`}
+              title={`${key}: +${val} pts`}
             />
           );
         })}
       </div>
       <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1">
-        {BREAKDOWN_SEGMENTS.filter(({ key }) => breakdown[key] > 0 && key !== "base").map(
-          ({ key, color, label }) => (
+        {BREAKDOWN_SEGMENTS
+          .filter(({ key }) => breakdown[key] > 0 && key !== "base")
+          .map(({ key, color, label }) => (
             <span key={key} className="flex items-center gap-1 text-[10px] text-gray-400">
               <span className={`w-2 h-2 rounded-full ${color} inline-block`} />
-              {label} {breakdown[key]} pts
+              {label} +{breakdown[key]}
             </span>
-          )
-        )}
-        {/* Penalty indicators */}
+          ))}
         {breakdown.roughSurface > 0 && (
           <span className="flex items-center gap-1 text-[10px] text-orange-500">
             <span className="w-2 h-2 rounded-full bg-orange-400 inline-block" />
-            Rough −{breakdown.roughSurface} pts
+            Rough −{breakdown.roughSurface}
+          </span>
+        )}
+        {breakdown.hostileRoad > 0 && (
+          <span className="flex items-center gap-1 text-[10px] text-red-500">
+            <span className="w-2 h-2 rounded-full bg-red-400 inline-block" />
+            Traffic −{breakdown.hostileRoad}
           </span>
         )}
         {breakdown.elevation > 0 && (
           <span className="flex items-center gap-1 text-[10px] text-red-400">
-            <span className="w-2 h-2 rounded-full bg-red-400 inline-block" />
-            Hilly −{breakdown.elevation} pts
+            <span className="w-2 h-2 rounded-full bg-red-300 inline-block" />
+            Hilly −{breakdown.elevation}
           </span>
         )}
       </div>
@@ -79,15 +128,7 @@ function ScoreBar({ breakdown, total }: { breakdown: ScoreBreakdown; total: numb
 
 // ─── Signal badges ────────────────────────────────────────────────────────────
 
-function Badge({
-  show,
-  bg,
-  label,
-}: {
-  show: boolean;
-  bg: string;
-  label: string;
-}) {
+function Badge({ show, bg, label }: { show: boolean; bg: string; label: string }) {
   if (!show) return null;
   return (
     <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${bg}`}>
@@ -106,6 +147,7 @@ interface RoutePanelProps {
   onSelectRoute: (id: number) => void;
   startName: string;
   endName: string;
+  useMetric: boolean;
 }
 
 export default function RoutePanel({
@@ -116,6 +158,7 @@ export default function RoutePanel({
   onSelectRoute,
   startName,
   endName,
+  useMetric,
 }: RoutePanelProps) {
   const selectedRoute = routes.find((r) => r.id === selectedRouteId);
 
@@ -124,9 +167,7 @@ export default function RoutePanel({
       {/* ── Happy Route summary card ── */}
       <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4">
         <div className="flex items-center gap-2 mb-1">
-          <span className="text-xl" aria-hidden>
-            🌿
-          </span>
+          <span className="text-xl" aria-hidden>🌿</span>
           <h2 className="font-bold text-emerald-900 text-base leading-tight">
             Happy Route Found!
           </h2>
@@ -142,10 +183,7 @@ export default function RoutePanel({
           <>
             <ul className="space-y-1.5">
               {explanation.bullets.map((bullet, i) => (
-                <li
-                  key={i}
-                  className="flex gap-2 text-sm text-emerald-800 leading-snug"
-                >
+                <li key={i} className="flex gap-2 text-sm text-emerald-800 leading-snug">
                   <span className="mt-0.5 flex-shrink-0 text-emerald-500">✦</span>
                   <span>{bullet}</span>
                 </li>
@@ -218,12 +256,12 @@ export default function RoutePanel({
                 <HappyScore score={route.happyScore} size="sm" />
               </div>
 
-              {/* Stats */}
-              <div className="mt-2 flex gap-3 text-xs text-gray-500">
-                <span>📏 {fmtDist(route.distance)}</span>
+              {/* Stats row */}
+              <div className="mt-2 flex flex-wrap gap-3 text-xs text-gray-500">
+                <span>📏 {fmtDist(route.distance, useMetric)}</span>
                 <span>⏱ {fmtTime(route.duration)}</span>
                 {route.elevationGainM != null && (
-                  <span className="text-amber-600">↑ {Math.round(route.elevationGainM)} m</span>
+                  <span className="text-amber-600">{fmtElev(route.elevationGainM, useMetric)}</span>
                 )}
               </div>
 
@@ -232,41 +270,16 @@ export default function RoutePanel({
 
               {/* Signal badges */}
               <div className="mt-2.5 flex flex-wrap gap-1.5">
-                <Badge
-                  show={route.signals.parkCount > 0}
-                  bg="bg-green-100 text-green-700"
-                  label={`🌳 ${route.signals.parkCount} park${route.signals.parkCount !== 1 ? "s" : ""}`}
-                />
-                <Badge
-                  show={route.signals.waterCount > 0}
-                  bg="bg-sky-100 text-sky-700"
-                  label={`💧 ${route.signals.waterCount} water`}
-                />
-                <Badge
-                  show={route.signals.cyclewayCount > 0}
-                  bg="bg-violet-100 text-violet-700"
-                  label={`🚴 ${route.signals.cyclewayCount} cycle paths`}
-                />
-                <Badge
-                  show={route.signals.greenCount > 0}
-                  bg="bg-lime-100 text-lime-700"
-                  label={`🌿 ${route.signals.greenCount} green`}
-                />
-                <Badge
-                  show={route.signals.litCount > 0}
-                  bg="bg-amber-100 text-amber-700"
-                  label={`💡 ${route.signals.litCount} lit`}
-                />
-                <Badge
-                  show={route.signals.segregatedCount > 0}
-                  bg="bg-cyan-100 text-cyan-700"
-                  label={`🛤️ ${route.signals.segregatedCount} separated`}
-                />
-                <Badge
-                  show={route.signals.roughSurfaceCount > 0}
-                  bg="bg-orange-100 text-orange-700"
-                  label={`⚠️ ${route.signals.roughSurfaceCount} rough`}
-                />
+                <Badge show={route.signals.parkCount > 0}          bg="bg-green-100 text-green-700"   label={`🌳 ${route.signals.parkCount} park${route.signals.parkCount !== 1 ? "s" : ""}`} />
+                <Badge show={route.signals.waterCount > 0}         bg="bg-sky-100 text-sky-700"       label={`💧 ${route.signals.waterCount} water`} />
+                <Badge show={route.signals.cyclewayCount > 0}      bg="bg-violet-100 text-violet-700" label={`🚴 ${route.signals.cyclewayCount} cycle paths`} />
+                <Badge show={route.signals.greenCount > 0}         bg="bg-lime-100 text-lime-700"     label={`🌿 ${route.signals.greenCount} green`} />
+                <Badge show={route.signals.litCount > 0}           bg="bg-amber-100 text-amber-700"   label={`💡 ${route.signals.litCount} lit`} />
+                <Badge show={route.signals.segregatedCount > 0}    bg="bg-cyan-100 text-cyan-700"     label={`🛤️ ${route.signals.segregatedCount} separated`} />
+                <Badge show={route.signals.friendlyRoadCount > 0}  bg="bg-teal-100 text-teal-700"     label={`🏘️ ${route.signals.friendlyRoadCount} friendly`} />
+                <Badge show={route.signals.trafficCalmingCount > 0} bg="bg-blue-100 text-blue-600"   label={`🚦 ${route.signals.trafficCalmingCount} calmed`} />
+                <Badge show={route.signals.hostileRoadCount > 0}   bg="bg-red-100 text-red-600"       label={`⚠️ ${route.signals.hostileRoadCount} busy roads`} />
+                <Badge show={route.signals.roughSurfaceCount > 0}  bg="bg-orange-100 text-orange-700" label={`🪨 ${route.signals.roughSurfaceCount} rough`} />
                 {route.signals.partial && (
                   <Badge show bg="bg-gray-100 text-gray-400" label="~ partial data" />
                 )}
@@ -275,25 +288,48 @@ export default function RoutePanel({
                   !route.signals.cyclewayCount &&
                   !route.signals.greenCount &&
                   !route.signals.litCount &&
-                  !route.signals.segregatedCount && (
+                  !route.signals.segregatedCount &&
+                  !route.signals.friendlyRoadCount && (
                     <span className="text-xs text-gray-400 italic">
                       No nearby green/cycle features found
                     </span>
                   )}
               </div>
+
+              {/* GPX export (only on selected route) */}
+              {isSelected && (
+                <div className="mt-2.5 pt-2.5 border-t border-gray-100">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      exportGPX(route, startName, endName);
+                    }}
+                    className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-emerald-600 transition-colors font-medium"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                    Export GPX
+                  </button>
+                </div>
+              )}
             </button>
           );
         })}
       </div>
 
       {/* ── Elevation profile for selected route ── */}
-      {selectedRoute?.elevationPoints && selectedRoute.elevationPoints.length >= 2 && selectedRoute.elevationGainM != null && (
-        <ElevationProfile
-          points={selectedRoute.elevationPoints}
-          gainM={selectedRoute.elevationGainM}
-          distanceKm={selectedRoute.distance / 1000}
-        />
-      )}
+      {selectedRoute?.elevationPoints &&
+        selectedRoute.elevationPoints.length >= 2 &&
+        selectedRoute.elevationGainM != null && (
+          <ElevationProfile
+            points={selectedRoute.elevationPoints}
+            gainM={selectedRoute.elevationGainM}
+            distanceMi={selectedRoute.distance / 1609.344}
+            useMetric={useMetric}
+          />
+        )}
     </div>
   );
 }

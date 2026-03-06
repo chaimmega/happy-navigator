@@ -1,7 +1,8 @@
 import { sampleCoords } from "./overpass";
 
-const ELEV_BASE = "https://api.opentopodata.org/v1/srtm90m";
-const SAMPLE_COUNT = 10;
+const ELEV_BASE = "https://api.opentopodata.org/v1/srtm30m";
+// OpenTopoData allows up to 100 locations per call — use more for accurate profiles
+const SAMPLE_COUNT = 50;
 
 /**
  * Fetch elevation data for a route via OpenTopoData (free, no API key).

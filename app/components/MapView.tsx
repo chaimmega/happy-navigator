@@ -4,7 +4,7 @@
 // This component is always loaded via dynamic() with ssr:false.
 import "leaflet/dist/leaflet.css";
 
-import { useEffect, useMemo, useCallback } from "react";
+import { useEffect, useMemo, useCallback, useState } from "react";
 import {
   MapContainer,
   TileLayer,
@@ -12,9 +12,27 @@ import {
   CircleMarker,
   Tooltip,
   useMap,
+  useMapEvents,
 } from "react-leaflet";
 import type { ScoredRoute, Coordinates } from "../types";
 import { ROUTE_COLORS, ROUTE_LABELS } from "../lib/constants";
+
+// ─── Tile layer configurations ─────────────────────────────────────────────────
+
+const TILE_LAYERS = {
+  osm: {
+    url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    label: "Standard",
+  },
+  cyclosm: {
+    url: "https://{s}.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png",
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://www.cyclosm.org">CyclOSM</a>',
+    label: "CyclOSM",
+  },
+} as const;
+
+type TileLayerKey = keyof typeof TILE_LAYERS;
 
 // ─── Auto-fit bounds helper ────────────────────────────────────────────────────
 
@@ -41,10 +59,20 @@ function FitBounds({
     ];
 
     map.fitBounds(points as [number, number][], { padding: [48, 48] });
-    // Only refit when the set of routes changes, not on every selectedRouteId change
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [routes]);
 
+  return null;
+}
+
+// ─── Map click handler ─────────────────────────────────────────────────────────
+
+function MapClickHandler({ onMapClick }: { onMapClick?: (lat: number, lng: number) => void }) {
+  useMapEvents({
+    click(e) {
+      onMapClick?.(e.latlng.lat, e.latlng.lng);
+    },
+  });
   return null;
 }
 
@@ -64,7 +92,6 @@ function RoutePolyline({
   const color = ROUTE_COLORS[index % ROUTE_COLORS.length];
   const label = ROUTE_LABELS[index % ROUTE_LABELS.length];
 
-  // Memoize the coordinate conversion — [lng,lat] → [lat,lng]
   const positions = useMemo(
     () => route.geometry.map(([lng, lat]) => [lat, lng] as [number, number]),
     [route.geometry]
@@ -82,9 +109,33 @@ function RoutePolyline({
       }}
       eventHandlers={{ click: onSelect }}
     >
-      {/* Plain string content — Leaflet tooltips render outside React DOM */}
       <Tooltip sticky>{`${label} — Score: ${route.happyScore}/100`}</Tooltip>
     </Polyline>
+  );
+}
+
+// ─── Tile toggle button (rendered outside MapContainer to avoid Leaflet z-index) ─
+
+function TileToggle({
+  current,
+  onChange,
+}: {
+  current: TileLayerKey;
+  onChange: (key: TileLayerKey) => void;
+}) {
+  const next: TileLayerKey = current === "osm" ? "cyclosm" : "osm";
+  return (
+    <button
+      type="button"
+      onClick={() => onChange(next)}
+      title={`Switch to ${TILE_LAYERS[next].label} map`}
+      className="absolute bottom-8 right-3 z-[1000] bg-white border border-gray-200 shadow-md rounded-lg px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-1.5"
+    >
+      <svg className="w-3.5 h-3.5 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+      </svg>
+      {TILE_LAYERS[next].label}
+    </button>
   );
 }
 
@@ -96,6 +147,7 @@ interface MapViewProps {
   startCoords: Coordinates;
   endCoords: Coordinates;
   onSelectRoute: (id: number) => void;
+  onMapClick?: (lat: number, lng: number) => void;
 }
 
 export default function MapView({
@@ -104,20 +156,20 @@ export default function MapView({
   startCoords,
   endCoords,
   onSelectRoute,
+  onMapClick,
 }: MapViewProps) {
-  // Build a stable id→originalIndex map once — used for consistent color/label assignment
+  const [tileLayer, setTileLayer] = useState<TileLayerKey>("osm");
+
   const indexById = useMemo(
     () => new Map(routes.map((r, i) => [r.id, i])),
     [routes]
   );
 
-  // Stable handler to avoid new function references on every render
   const handleSelect = useCallback(
     (id: number) => onSelectRoute(id),
     [onSelectRoute]
   );
 
-  // Render order: unselected first, selected last so it draws on top in SVG stacking
   const renderOrder = useMemo(
     () =>
       [...routes].sort((a, b) =>
@@ -126,65 +178,57 @@ export default function MapView({
     [routes, selectedRouteId]
   );
 
+  const tile = TILE_LAYERS[tileLayer];
+
   return (
-    <MapContainer
-      center={[startCoords.lat, startCoords.lng]}
-      zoom={13}
-      style={{ height: "100%", width: "100%" }}
-    >
-      <TileLayer
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-      />
-
-      {renderOrder.map((route) => (
-        <RoutePolyline
-          key={route.id}
-          route={route}
-          index={indexById.get(route.id) ?? 0}
-          isSelected={route.id === selectedRouteId}
-          onSelect={() => handleSelect(route.id)}
-        />
-      ))}
-
-      {/* Start marker — green */}
-      <CircleMarker
+    <div className="relative h-full w-full">
+      <MapContainer
         center={[startCoords.lat, startCoords.lng]}
-        radius={9}
-        pathOptions={{
-          fillColor: "#22c55e",
-          color: "#fff",
-          weight: 2.5,
-          fillOpacity: 1,
-        }}
+        zoom={13}
+        style={{ height: "100%", width: "100%" }}
       >
-        <Tooltip direction="top" offset={[0, -12]} permanent>
-          Start
-        </Tooltip>
-      </CircleMarker>
+        <TileLayer attribution={tile.attribution} url={tile.url} />
 
-      {/* End marker — red */}
-      <CircleMarker
-        center={[endCoords.lat, endCoords.lng]}
-        radius={9}
-        pathOptions={{
-          fillColor: "#ef4444",
-          color: "#fff",
-          weight: 2.5,
-          fillOpacity: 1,
-        }}
-      >
-        <Tooltip direction="top" offset={[0, -12]} permanent>
-          End
-        </Tooltip>
-      </CircleMarker>
+        {renderOrder.map((route) => (
+          <RoutePolyline
+            key={route.id}
+            route={route}
+            index={indexById.get(route.id) ?? 0}
+            isSelected={route.id === selectedRouteId}
+            onSelect={() => handleSelect(route.id)}
+          />
+        ))}
 
-      <FitBounds
-        routes={routes}
-        startCoords={startCoords}
-        endCoords={endCoords}
-      />
-    </MapContainer>
+        {/* Start marker — green */}
+        <CircleMarker
+          center={[startCoords.lat, startCoords.lng]}
+          radius={9}
+          pathOptions={{ fillColor: "#22c55e", color: "#fff", weight: 2.5, fillOpacity: 1 }}
+        >
+          <Tooltip direction="top" offset={[0, -12]} permanent>Start</Tooltip>
+        </CircleMarker>
+
+        {/* End marker — red */}
+        <CircleMarker
+          center={[endCoords.lat, endCoords.lng]}
+          radius={9}
+          pathOptions={{ fillColor: "#ef4444", color: "#fff", weight: 2.5, fillOpacity: 1 }}
+        >
+          <Tooltip direction="top" offset={[0, -12]} permanent>End</Tooltip>
+        </CircleMarker>
+
+        <FitBounds routes={routes} startCoords={startCoords} endCoords={endCoords} />
+        <MapClickHandler onMapClick={onMapClick} />
+      </MapContainer>
+
+      {/* Tile layer toggle — outside MapContainer to avoid Leaflet z-index conflicts */}
+      <TileToggle current={tileLayer} onChange={setTileLayer} />
+
+      {onMapClick && (
+        <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[1000] bg-white/90 backdrop-blur-sm border border-gray-200 shadow-sm rounded-full px-3 py-1 text-xs text-gray-500 pointer-events-none">
+          Click map to set location
+        </div>
+      )}
+    </div>
   );
 }
-

@@ -9,9 +9,12 @@ export interface HappinessSignals {
   waterCount: number;
   cyclewayCount: number;
   greenCount: number;
-  litCount: number;         // ways with lit=yes (street lighting)
-  segregatedCount: number;  // ways with cycleway=track (physically separated)
-  roughSurfaceCount: number; // ways with gravel/dirt/cobblestone etc.
+  litCount: number;           // ways with lit=yes (street lighting)
+  segregatedCount: number;    // ways with cycleway=track (physically separated)
+  roughSurfaceCount: number;  // ways with gravel/dirt/cobblestone etc.
+  friendlyRoadCount: number;  // living_street + pedestrian + bicycle_road
+  trafficCalmingCount: number; // traffic_calming=* (speed bumps, tables, etc.)
+  hostileRoadCount: number;   // trunk/primary/motorway near route (penalty)
   /** true when Overpass timed out / errored — scores are estimated */
   partial: boolean;
 }
@@ -24,9 +27,12 @@ export interface ScoreBreakdown {
   green: number;        // 0–15
   lit: number;          // 0–10
   segregated: number;   // 0–15
+  friendlyRoad: number; // 0–8
+  trafficCalming: number; // 0–5
   base: number;         // always 5
   roughSurface: number; // 0–15 (penalty magnitude, subtracted from score)
   elevation: number;    // 0–20 (penalty magnitude, subtracted from score)
+  hostileRoad: number;  // 0–12 (penalty magnitude, subtracted from score)
 }
 
 /** A route from OSRM, enriched with happiness data */

@@ -1,7 +1,47 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import PlaceAutocomplete, { type PlaceValue } from "./PlaceAutocomplete";
+
+// ─── Recent searches (persisted in localStorage) ──────────────────────────────
+
+const STORAGE_KEY = "happynav_recent";
+const MAX_RECENT = 5;
+
+interface RecentSearch {
+  startName: string;
+  endName: string;
+  startCoords: { lat: number; lng: number };
+  endCoords: { lat: number; lng: number };
+}
+
+function loadRecent(): RecentSearch[] {
+  try {
+    return JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "[]");
+  } catch {
+    return [];
+  }
+}
+
+export function saveRecentSearch(entry: RecentSearch) {
+  try {
+    const existing = loadRecent().filter(
+      (r) =>
+        !(
+          Math.abs(r.startCoords.lat - entry.startCoords.lat) < 0.0001 &&
+          Math.abs(r.endCoords.lat - entry.endCoords.lat) < 0.0001
+        )
+    );
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify([entry, ...existing].slice(0, MAX_RECENT))
+    );
+  } catch {
+    // localStorage may be unavailable (SSR, private mode)
+  }
+}
+
+// ─── Component ────────────────────────────────────────────────────────────────
 
 interface SearchFormProps {
   onSubmit: (data: {
@@ -12,9 +52,20 @@ interface SearchFormProps {
     googleMapsUrl?: string;
   }) => void;
   loading: boolean;
+  /** If set, clicking "pin" mode is active and this coordinate is pre-filled */
+  mapPinPlace?: PlaceValue;
+  /** Which field the map pin is targeting */
+  mapPinTarget?: "start" | "end";
+  onClearMapPin?: () => void;
 }
 
-export default function SearchForm({ onSubmit, loading }: SearchFormProps) {
+export default function SearchForm({
+  onSubmit,
+  loading,
+  mapPinPlace,
+  mapPinTarget,
+  onClearMapPin,
+}: SearchFormProps) {
   const [startPlace, setStartPlace] = useState<PlaceValue>({ text: "" });
   const [endPlace, setEndPlace] = useState<PlaceValue>({ text: "" });
   const [mapsUrl, setMapsUrl] = useState("");
@@ -22,6 +73,20 @@ export default function SearchForm({ onSubmit, loading }: SearchFormProps) {
   const [showManualFallback, setShowManualFallback] = useState(false);
   const [gpsLoading, setGpsLoading] = useState(false);
   const [gpsError, setGpsError] = useState<string | null>(null);
+  const [recentSearches, setRecentSearches] = useState<RecentSearch[]>([]);
+  const [showRecent, setShowRecent] = useState(false);
+
+  // Load recent searches on mount (client only)
+  useEffect(() => {
+    setRecentSearches(loadRecent());
+  }, []);
+
+  // Apply map pin when it arrives from parent
+  useEffect(() => {
+    if (!mapPinPlace) return;
+    if (mapPinTarget === "start") setStartPlace(mapPinPlace);
+    else setEndPlace(mapPinPlace);
+  }, [mapPinPlace, mapPinTarget]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -41,6 +106,8 @@ export default function SearchForm({ onSubmit, loading }: SearchFormProps) {
         endCoords: endPlace.coords,
       });
     }
+    setShowRecent(false);
+    onClearMapPin?.();
   };
 
   const canSubmit =
@@ -48,16 +115,6 @@ export default function SearchForm({ onSubmit, loading }: SearchFormProps) {
     (urlMode
       ? mapsUrl.trim() !== ""
       : startPlace.text.trim() !== "" && endPlace.text.trim() !== "");
-
-  const switchToUrl = () => {
-    setUrlMode(true);
-    setShowManualFallback(false);
-  };
-
-  const switchToManual = () => {
-    setUrlMode(false);
-    setShowManualFallback(false);
-  };
 
   const handleSwap = () => {
     setStartPlace(endPlace);
@@ -85,28 +142,31 @@ export default function SearchForm({ onSubmit, loading }: SearchFormProps) {
     );
   };
 
+  const applyRecent = (r: RecentSearch) => {
+    setStartPlace({ text: r.startName, coords: r.startCoords });
+    setEndPlace({ text: r.endName, coords: r.endCoords });
+    setUrlMode(false);
+    setShowRecent(false);
+  };
+
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       {/* Mode toggle */}
       <div className="flex gap-1 p-1 bg-gray-100 rounded-lg text-sm">
         <button
           type="button"
-          onClick={switchToManual}
+          onClick={() => { setUrlMode(false); setShowManualFallback(false); }}
           className={`flex-1 py-1.5 rounded-md font-medium transition-all ${
-            !urlMode
-              ? "bg-white text-gray-900 shadow-sm"
-              : "text-gray-500 hover:text-gray-700"
+            !urlMode ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
           }`}
         >
           Type addresses
         </button>
         <button
           type="button"
-          onClick={switchToUrl}
+          onClick={() => { setUrlMode(true); setShowManualFallback(false); }}
           className={`flex-1 py-1.5 rounded-md font-medium transition-all ${
-            urlMode
-              ? "bg-white text-gray-900 shadow-sm"
-              : "text-gray-500 hover:text-gray-700"
+            urlMode ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
           }`}
         >
           Paste Maps URL
@@ -130,7 +190,6 @@ export default function SearchForm({ onSubmit, loading }: SearchFormProps) {
             />
           </div>
 
-          {/* Fallback toggle */}
           {!showManualFallback ? (
             <button
               type="button"
@@ -166,7 +225,7 @@ export default function SearchForm({ onSubmit, loading }: SearchFormProps) {
       {/* Manual address mode */}
       {!urlMode && (
         <>
-          {/* From field with GPS button */}
+          {/* From field */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <label
@@ -206,9 +265,7 @@ export default function SearchForm({ onSubmit, loading }: SearchFormProps) {
               required
               autoFocus
             />
-            {gpsError && (
-              <p className="mt-1 text-xs text-red-500">{gpsError}</p>
-            )}
+            {gpsError && <p className="mt-1 text-xs text-red-500">{gpsError}</p>}
           </div>
 
           {/* Swap button */}
@@ -254,6 +311,40 @@ export default function SearchForm({ onSubmit, loading }: SearchFormProps) {
           "Find Happy Routes"
         )}
       </button>
+
+      {/* Recent searches */}
+      {recentSearches.length > 0 && !urlMode && (
+        <div>
+          <button
+            type="button"
+            onClick={() => setShowRecent((v) => !v)}
+            className="text-xs text-gray-400 hover:text-gray-600 transition-colors flex items-center gap-1"
+          >
+            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            {showRecent ? "Hide" : "Recent searches"}
+          </button>
+
+          {showRecent && (
+            <ul className="mt-2 space-y-1">
+              {recentSearches.map((r, i) => (
+                <li key={i}>
+                  <button
+                    type="button"
+                    onClick={() => applyRecent(r)}
+                    className="w-full text-left text-xs px-2.5 py-2 rounded-lg bg-gray-50 hover:bg-emerald-50 hover:text-emerald-700 transition-colors text-gray-600 truncate"
+                  >
+                    <span className="font-medium">{r.startName}</span>
+                    <span className="mx-1 opacity-50">→</span>
+                    <span className="font-medium">{r.endName}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
     </form>
   );
 }

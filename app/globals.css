@@ -2,6 +2,19 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── Full-height fix for iOS Safari ── */
+/* The 100dvh unit accounts for the browser chrome (address bar, etc.)         */
+/* Fallback to 100vh for browsers that don't support dvh yet.                  */
+:root {
+  --full-height: 100dvh;
+}
+
+@supports not (height: 100dvh) {
+  :root {
+    --full-height: 100vh;
+  }
+}
+
 /* ── Leaflet ── */
 /* Prevent Next.js from fighting Leaflet's own z-index stack */
 .leaflet-container {
@@ -27,4 +40,10 @@
 .sidebar-scroll {
   scrollbar-width: thin;
   scrollbar-color: #d1d5db transparent;
+}
+
+/* ── Map pin mode cursor ── */
+/* Applied when the user is in "click to set location" mode */
+.map-pin-mode .leaflet-container {
+  cursor: crosshair !important;
 }

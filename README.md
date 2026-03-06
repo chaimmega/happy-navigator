@@ -1,6 +1,6 @@
 # Happy Navigator
 
-> Find the happiest bike route between two locations — scored by parks, cycleways, water, and green spaces.
+> Find the happiest bike route between two locations — scored by parks, cycleways, water, lighting, traffic stress, and elevation.
 
 ![Happy Navigator screenshot](docs/screenshot.png)
 
@@ -10,20 +10,23 @@
 
 Given a **start** and **end** location (or a pasted Google Maps directions URL), Happy Navigator:
 
-1. **Geocodes** both addresses via [Nominatim](https://nominatim.openstreetmap.org/) (free, no key required).
+1. **Geocodes** both addresses via [Nominatim](https://nominatim.openstreetmap.org/) (free, no key).
 2. **Fetches 2–3 route alternatives** from the [OSRM](http://project-osrm.org/) public bike routing server.
-3. **Scores each route** by querying [OpenStreetMap Overpass API](https://overpass-api.de/) for nearby:
+3. **Scores each route** by querying [OpenStreetMap Overpass API](https://overpass-api.de/) for:
    - Parks & gardens (`leisure=park`)
-   - Green land-use (forests, meadows)
-   - Water features (rivers, lakes)
-   - Dedicated cycle infrastructure (`highway=cycleway`, `cycleway=lane/track`)
-4. **Calls an LLM once** (Anthropic Claude Haiku by default) with a compact JSON summary to:
-   - Confirm or pick the best route
-   - Write a short, friendly explanation (2–4 bullets)
-   - Suggest optional stops (cafés, parks, viewpoints) where relevant
-5. **Displays everything** on an interactive Leaflet/OpenStreetMap map with a side panel showing scores, signals, and the AI explanation.
+   - Green land-use (forests, meadows, woodland)
+   - Water features (rivers, lakes, canals)
+   - Dedicated cycle infrastructure (`highway=cycleway`, `cycleway=lane/track`, `cycleway:left/right=track`)
+   - Street lighting (`lit=yes`)
+   - **Friendly roads** (living streets, pedestrian areas, bicycle roads) — *new*
+   - **Traffic calming** (speed bumps, tables, chicanes) — *new*
+   - **Traffic stress penalty** (trunk/primary/motorway roads nearby) — *new*
+   - Surface roughness penalty (gravel, cobblestone, dirt)
+4. **Fetches elevation data** via [OpenTopoData SRTM 30m](https://www.opentopodata.org/) (50 sample points for accurate profiles).
+5. **Calls an LLM once** (Anthropic Claude Haiku) with a compact JSON summary to confirm the best route and explain why.
+6. **Displays everything** on an interactive Leaflet/OpenStreetMap map with a detailed side panel.
 
-**All external API calls (routing, geocoding, OSM data) are free and open.** Only the AI explanation requires an API key.
+**All routing, geocoding, and map data are free and open.** Only the AI explanation requires an API key.
 
 ---
 
@@ -31,27 +34,24 @@ Given a **start** and **end** location (or a pasted Google Maps directions URL),
 
 ```
 Browser
-  └── Next.js App Router (React + Tailwind)
-        ├── app/page.tsx              — main UI (search form + map + results panel)
+  └── Next.js 15 App Router (React + Tailwind)
+        ├── app/page.tsx              — main UI (responsive, metric toggle, map pins)
         ├── app/components/
-        │     ├── SearchForm.tsx      — address / Google Maps URL input
-        │     ├── MapView.tsx         — Leaflet map (dynamically imported, ssr:false)
-        │     ├── RoutePanel.tsx      — route cards with scores & AI explanation
+        │     ├── SearchForm.tsx      — address / Google Maps URL input + recent searches
+        │     ├── MapView.tsx         — Leaflet map (CyclOSM tile toggle, map click handler)
+        │     ├── RoutePanel.tsx      — route cards, scores, GPX export, AI explanation
+        │     ├── ElevationProfile.tsx — SVG elevation chart (metric/imperial)
         │     └── HappyScore.tsx      — score badge component
-        └── app/api/navigate/route.ts — POST handler (all server-side logic)
-              ├── lib/nominatim.ts    — geocoding via Nominatim
-              ├── lib/osrm.ts         — bike routing via OSRM public server
-              ├── lib/overpass.ts     — OSM feature queries (parks, cycleways, water)
-              ├── lib/happiness.ts    — weighted scoring formula
-              └── lib/parseGoogleMapsUrl.ts — parse Google Maps directions URLs
+        └── app/api/
+              ├── navigate/route.ts   — POST handler (full scoring pipeline, rate limiting)
+              └── reverse/route.ts    — GET handler (reverse geocode for map clicks)
+                    ├── lib/nominatim.ts    — geocoding via Nominatim
+                    ├── lib/osrm.ts         — bike routing via OSRM
+                    ├── lib/overpass.ts     — OSM feature queries (fallback servers)
+                    ├── lib/elevation.ts    — elevation via OpenTopoData SRTM 30m
+                    ├── lib/happiness.ts    — weighted scoring formula
+                    └── lib/parseGoogleMapsUrl.ts
 ```
-
-**Key design decisions:**
-
-- **No paid APIs required to run locally** — routing + geocoding + map tiles are all free/open.
-- **AI is called once per search**, with a compact JSON payload (~200 tokens input).
-- **Overpass queries degrade gracefully** — if they fail or time out, routes are still shown with partial scores.
-- **API keys never reach the browser** — the `/api/navigate` route handler is server-only.
 
 ---
 
@@ -60,13 +60,12 @@ Browser
 ### Prerequisites
 
 - [Node.js](https://nodejs.org/) v18 or later
-- npm (bundled with Node)
 - An **Anthropic API key** (get one at [console.anthropic.com](https://console.anthropic.com/settings/keys))
 
 ### 1 — Clone and install
 
 ```bash
-git clone <YOUR_REPO_URL> happy-navigator
+git clone https://github.com/chaimmega/happy-navigator
 cd happy-navigator
 npm install
 ```
@@ -77,7 +76,7 @@ npm install
 cp .env.local.example .env.local
 ```
 
-Open `.env.local` and fill in your key:
+Fill in `.env.local`:
 
 ```env
 AI_PROVIDER=anthropic
@@ -87,17 +86,15 @@ ANTHROPIC_API_KEY=sk-ant-...
 **Using OpenAI instead?**
 
 ```bash
-npm install openai   # install the optional package
+npm install openai
 ```
-
-Then set in `.env.local`:
 
 ```env
 AI_PROVIDER=openai
 OPENAI_API_KEY=sk-...
 ```
 
-### 3 — Run the dev server
+### 3 — Run
 
 ```bash
 npm run dev
@@ -105,101 +102,57 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
-> **First search takes 10–20 seconds** — it geocodes, fetches routing alternatives, runs parallel Overpass queries, and calls the AI. Subsequent searches are similar (all external APIs).
+> First search takes 15–20 seconds — geocoding + routing + Overpass + elevation + AI all run in parallel.
 
 ---
 
 ## Usage
 
-**Option A — Type addresses:**
+**Type addresses:**
+1. Enter start/end (autocomplete via Photon/Komoot)
+2. Use GPS button for current location
+3. Click ⇅ to swap start and end
+4. Click **Find Happy Routes**
 
-1. Enter a start address (e.g. `Central Park, New York`)
-2. Enter an end address (e.g. `Brooklyn Bridge, New York`)
-3. Click **Find Happy Routes**
+**Paste a Google Maps URL:**
+- `https://www.google.com/maps/dir/Central+Park/Brooklyn+Bridge`
+- `https://www.google.com/maps/dir/?api=1&origin=...&destination=...`
 
-**Option B — Paste a Google Maps URL:**
+**Map pin mode (desktop):**
+- Click **📍 Pin start** or **📍 Pin end** in the header to set locations by clicking the map
 
-1. Click the **Paste Maps URL** tab
-2. Paste a URL like:
-   - `https://www.google.com/maps/dir/Central+Park/Brooklyn+Bridge`
-   - `https://www.google.com/maps/dir/?api=1&origin=Central+Park&destination=Brooklyn+Bridge`
-3. Click **Find Happy Routes**
+**Units:** Toggle km/mi in the header (preference saved in localStorage)
 
-If the URL can't be parsed automatically, fill in the fallback address fields below it.
+**Tile layers:** Click the map layer button to switch between standard OpenStreetMap and **CyclOSM** (shows cycle infrastructure)
+
+**Export:** Click **Export GPX** on the selected route to download for Garmin/Wahoo devices
+
+**Shareable links:** URL updates with coords after each search — share or bookmark it
+
+**Recent searches:** Stored locally — click "Recent searches" below the form
 
 ---
 
 ## Happy Score formula
 
 ```
-score = 10                                      ← base (any routable path)
-      + min((parks  / distKm) × 12,  30)        ← up to 30 pts
-      + min((cycles / distKm) × 10,  25)        ← up to 25 pts
-      + min((water  / distKm) × 8,   20)        ← up to 20 pts
-      + min((green  / distKm) × 5,   15)        ← up to 15 pts
+score = 5 (base)
+      + min((parks          / km) × 12, 30)   ← up to 30 pts
+      + min((cycleways      / km) × 10, 25)   ← up to 25 pts
+      + min((water          / km) × 8,  20)   ← up to 20 pts
+      + min((green          / km) × 5,  15)   ← up to 15 pts
+      + min((segregated     / km) × 6,  15)   ← up to 15 pts
+      + min((friendlyRoads  / km) × 3,   8)   ← up to  8 pts  (living streets, bicycle roads)
+      + min((lit            / km) × 4,  10)   ← up to 10 pts
+      + min((trafficCalming / km) × 2,   5)   ← up to  5 pts
+      − min((roughSurface   / km) × 5,  15)   ← up to −15 pts
+      − min((elevation gain / km) × 3,  20)   ← up to −20 pts
+      − min((hostileRoads   / km) × 4,  12)   ← up to −12 pts (trunk/primary/motorway)
 ```
 
-Counts are normalised per km so shorter routes aren't penalised for having fewer total features.
+All counts normalised per km. Final score clamped to 0–100.
 
----
-
-## Demo Script (for Loom recording)
-
-1. **Open the app** at `http://localhost:3000`.
-
-2. **Show the empty state** — point out the sidebar and placeholder map.
-
-3. **Type Mode demo:**
-   - Start: `Battersea Park, London`
-   - End: `Southwark Bridge, London`
-   - Click **Find Happy Routes** and narrate the loading state.
-
-4. **Results appear:**
-   - Point to the map — 2–3 colored polylines (emerald = best, blue = 2nd, orange = 3rd).
-   - Green circle = Start, Red circle = End.
-   - Show the side panel: Happy Score badges, distance/time, signal badges (parks, cycleways, water).
-   - Read the AI explanation bullets aloud.
-   - Click a different route in the side panel — watch the map highlight change.
-
-5. **URL Mode demo (bonus):**
-   - Switch to "Paste Maps URL" tab.
-   - Paste `https://www.google.com/maps/dir/Vondelpark,+Amsterdam/Rijksmuseum,+Amsterdam`
-   - Show it auto-parses and runs.
-
-6. **Wrap up:**
-   - Emphasise: 100% open APIs for routing + maps, only AI needs a key.
-   - Mention the score formula and Overpass graceful degradation.
-
----
-
-## GitHub — Initial push
-
-```bash
-# In the project root:
-git init
-git add .
-git commit -m "Initial commit: Happy Navigator MVP"
-git branch -M main
-git remote add origin <REPLACE_WITH_GITHUB_REPO_URL>
-git push -u origin main
-```
-
-To create a GitHub repo first:
-
-```bash
-# With GitHub CLI (https://cli.github.com/):
-gh repo create happy-navigator --public --source=. --remote=origin --push
-```
-
----
-
-## Environment variables reference
-
-| Variable | Required | Description |
-|---|---|---|
-| `AI_PROVIDER` | No | `anthropic` (default) or `openai` |
-| `ANTHROPIC_API_KEY` | Yes (if anthropic) | Anthropic API key |
-| `OPENAI_API_KEY` | Yes (if openai) | OpenAI API key |
+To adjust weights, edit `app/lib/happiness.ts` only.
 
 ---
 
@@ -208,23 +161,44 @@ gh repo create happy-navigator --public --source=. --remote=origin --push
 | Layer | Technology |
 |---|---|
 | Framework | Next.js 15 (App Router) |
-| Language | TypeScript |
+| Language | TypeScript (strict) |
 | Styling | Tailwind CSS v3 |
 | Map | Leaflet + react-leaflet |
-| Map tiles | OpenStreetMap (free) |
-| Geocoding | Nominatim (free, no key) |
-| Routing | OSRM public demo server (free, no key) |
-| OSM data | Overpass API (free, no key) |
-| AI | Anthropic Claude Haiku (cheap — ~$0.001/search) |
+| Tile layers | OpenStreetMap standard + CyclOSM |
+| Geocoding | Nominatim + Photon/Komoot autocomplete |
+| Routing | OSRM public bike server |
+| OSM data | Overpass API (with fallback to overpass.kumi.systems) |
+| Elevation | OpenTopoData SRTM 30m (50 sample points) |
+| AI | Anthropic Claude Haiku (~$0.001/search) |
 
 ---
 
-## Limitations & known constraints
+## API endpoints
 
-- **OSRM public server** has no SLA and may occasionally be slow. For production, self-host OSRM with a regional `.osm.pbf` extract.
-- **Overpass API** rate-limits heavy usage. The app queries conservatively (one compound query per route, 6 sampled points, 200 m radius).
-- **Google Maps shortened URLs** (`maps.app.goo.gl/...`) cannot be parsed client-side without following the redirect — fill in addresses manually.
-- The Happy Score is a **heuristic proxy** for route pleasantness. Real-world conditions (traffic, road surface, elevation) are not currently considered.
+| Endpoint | Method | Description |
+|---|---|---|
+| `/api/navigate` | POST | Full pipeline: geocode → route → score → AI |
+| `/api/reverse` | GET | Reverse geocode `?lat=&lng=` for map pin mode |
+
+---
+
+## Environment variables
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `AI_PROVIDER` | No | `anthropic` | `anthropic` or `openai` |
+| `ANTHROPIC_API_KEY` | If anthropic | — | Anthropic API key |
+| `OPENAI_API_KEY` | If openai | — | OpenAI API key |
+
+---
+
+## Limitations
+
+- **OSRM public server** has no SLA. For production, self-host or use [OpenRouteService](https://openrouteservice.org/) free tier.
+- **Overpass API** rate-limits heavy usage. Conservative query: 10 sampled points, 250 m radius.
+- **Rate limiting**: 10 requests/minute per IP (in-memory, resets on server restart).
+- **Google Maps shortened URLs** (`maps.app.goo.gl`) can't be parsed client-side — use the fallback address fields.
+- The Happy Score is a heuristic proxy. Real-world conditions (temporary roadworks, construction) aren't reflected.
 
 ---
 
