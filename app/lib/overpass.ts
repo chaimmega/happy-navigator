@@ -19,26 +19,41 @@ export function sampleCoords(
 }
 
 /**
- * Build a compact Overpass QL query that checks all sampled points in a single
- * request using the multi-point `around` syntax.
+ * Compute a bounding box string (south,west,north,east) from route coordinates
+ * with a small buffer in degrees (~300m).
+ */
+function computeBbox(points: [number, number][], bufferDeg = 0.003): string {
+  const lats = points.map(([, lat]) => lat);
+  const lngs = points.map(([lng]) => lng);
+  const s = Math.min(...lats) - bufferDeg;
+  const w = Math.min(...lngs) - bufferDeg;
+  const n = Math.max(...lats) + bufferDeg;
+  const e = Math.max(...lngs) + bufferDeg;
+  return `${s},${w},${n},${e}`;
+}
+
+/**
+ * Build a compact Overpass QL query using a global bbox pre-filter + around corridor.
+ * The bbox dramatically reduces the data set Overpass must check, making the
+ * around filter fast enough even in dense urban OSM data.
  *
  * Tag categories queried:
  *   Parks / leisure green areas
  *   Green land-use (forest, grass, meadow)
  *   Water (natural + waterway)
- *   Cycleways / bike infrastructure (incl. cycleway:left/right=track)
- *   Lit roads (street lighting)
- *   Segregated cycle tracks (physically separated from traffic)
- *   Rough surfaces (gravel, dirt, cobblestone — comfort penalty)
- *   Friendly roads (living_street, pedestrian areas, bicycle roads)
- *   Traffic calming features (speed bumps, tables, etc.)
- *   Hostile roads (trunk, primary, motorway — traffic stress penalty)
+ *   Waterways (rivers, canals, streams — canoe infrastructure)
+ *   Boat launches / put-in points (slipways, canoe access)
+ *   Portage points (portage access)
+ *   Lit ways (lighting along bank)
+ *   Rapids (whitewater rapid grades — difficulty penalty)
+ *   Motorboat zones (motor boat traffic — safety penalty)
  */
 function buildQuery(points: [number, number][], radiusM = 250): string {
   const coords = points.map(([lng, lat]) => `${lat},${lng}`).join(",");
   const around = `around:${radiusM},${coords}`;
+  const bbox = computeBbox(points);
 
-  return `[out:json][timeout:12];
+  return `[out:json][timeout:12][bbox:${bbox}];
 (
   node["leisure"="park"](${around});
   way["leisure"="park"](${around});
@@ -47,34 +62,22 @@ function buildQuery(points: [number, number][], radiusM = 250): string {
   way["natural"~"^(wood|scrub|heath)$"](${around});
   node["natural"="water"](${around});
   way["natural"="water"](${around});
-  way["waterway"~"^(river|canal|stream|riverbank)$"](${around});
-  way["highway"="cycleway"](${around});
-  way["cycleway"~"^(lane|track|shared_lane|opposite_lane)$"](${around});
-  way["cycleway:left"~"^(lane|track)$"](${around});
-  way["cycleway:right"~"^(lane|track)$"](${around});
-  way["cycleway:both"~"^(lane|track)$"](${around});
-  node["cycleway"~"^(lane|track)$"](${around});
+  way["waterway"~"^(river|canal|stream|drain|riverbank)$"](${around});
+  node["leisure"="slipway"](${around});
+  way["leisure"="slipway"](${around});
+  node["canoe"~"^(put_in|portage|yes)$"](${around});
+  node["portage"="yes"](${around});
   way["lit"="yes"](${around});
-  way["surface"~"^(gravel|dirt|cobblestone|sand|unpaved|earth|mud|grass|compacted)$"](${around});
-  way["highway"~"^(living_street|pedestrian)$"](${around});
-  way["bicycle_road"="yes"](${around});
-  way["cyclestreet"="yes"](${around});
-  node["traffic_calming"](${around});
-  way["traffic_calming"](${around});
-  way["highway"~"^(trunk|primary|motorway)$"](${around});
-  way["highway"~"^(trunk_link|primary_link|motorway_link)$"](${around});
+  node["whitewater:rapid_grade"](${around});
+  way["motorboat"~"^(yes|designated)$"](${around});
 );
 out tags qt;`;
 }
 
-const ROUGH_SURFACES = new Set([
-  "gravel", "dirt", "cobblestone", "sand", "unpaved", "earth", "mud", "grass", "compacted",
-]);
-
 const EMPTY_SIGNALS: HappinessSignals = {
-  parkCount: 0, waterCount: 0, cyclewayCount: 0, greenCount: 0,
-  litCount: 0, segregatedCount: 0, roughSurfaceCount: 0,
-  friendlyRoadCount: 0, trafficCalmingCount: 0, hostileRoadCount: 0,
+  parkCount: 0, waterCount: 0, waterwayCount: 0, greenCount: 0,
+  litCount: 0, calmWaterCount: 0, rapidCount: 0,
+  launchCount: 0, portageCount: 0, motorBoatCount: 0,
   partial: true,
 };
 
@@ -102,7 +105,7 @@ async function fetchOverpass(query: string): Promise<Response> {
 }
 
 /**
- * Query OSM via Overpass for happiness signals along a route.
+ * Query OSM via Overpass for happiness signals along a canoe route.
  * Degrades gracefully on timeout / rate-limit — returns zero counts with partial=true.
  */
 export async function getHappinessSignals(
@@ -113,20 +116,28 @@ export async function getHappinessSignals(
 
   try {
     const resp = await fetchOverpass(query);
-    const data: { elements: Array<{ tags?: Record<string, string> }> } =
-      await resp.json();
-    const elements = data.elements ?? [];
+    const rawText = await resp.text();
+    const data: { elements?: Array<{ tags?: Record<string, string> }>; remark?: string } =
+      JSON.parse(rawText);
+
+    if (!data.elements || data.remark?.includes("error")) {
+      console.warn("[overpass] unexpected response:", data.remark ?? "no elements field");
+      return EMPTY_SIGNALS;
+    }
+
+    const elements = data.elements;
+    console.log(`[overpass] ${elements.length} elements returned`);
 
     let parkCount = 0;
     let waterCount = 0;
-    let cyclewayCount = 0;
+    let waterwayCount = 0;
     let greenCount = 0;
     let litCount = 0;
-    let segregatedCount = 0;
-    let roughSurfaceCount = 0;
-    let friendlyRoadCount = 0;
-    let trafficCalmingCount = 0;
-    let hostileRoadCount = 0;
+    let calmWaterCount = 0;
+    let rapidCount = 0;
+    let launchCount = 0;
+    let portageCount = 0;
+    let motorBoatCount = 0;
 
     for (const el of elements) {
       const t = el.tags ?? {};
@@ -141,43 +152,35 @@ export async function getHappinessSignals(
 
       if (t.natural === "water" || t.waterway) waterCount++;
 
-      if (t.highway === "cycleway" || t.cycleway) cyclewayCount++;
+      // Waterway infrastructure (rivers, canals, streams)
+      if (t.waterway) waterwayCount++;
+
+      // Calm water sections (lakes/ponds = calm paddling)
+      if (t.natural === "water") calmWaterCount++;
 
       if (t.lit === "yes") litCount++;
 
-      // Physically separated cycle tracks — check both way-level and side-specific tags
+      // Boat launches and canoe put-in points
       if (
-        t.cycleway === "track" ||
-        t["cycleway:left"] === "track" ||
-        t["cycleway:right"] === "track" ||
-        t["cycleway:both"] === "track"
-      ) segregatedCount++;
+        t.leisure === "slipway" ||
+        t.canoe === "put_in" ||
+        t.canoe === "yes"
+      ) launchCount++;
 
-      if (t.surface && ROUGH_SURFACES.has(t.surface)) roughSurfaceCount++;
+      // Portage points
+      if (t.portage === "yes" || t.canoe === "portage") portageCount++;
 
-      // Friendly road types (low-stress cycling environment)
-      if (
-        t.highway === "living_street" ||
-        t.highway === "pedestrian" ||
-        t.bicycle_road === "yes" ||
-        t.cyclestreet === "yes"
-      ) friendlyRoadCount++;
+      // Rapids — difficulty penalty
+      if (t["whitewater:rapid_grade"]) rapidCount++;
 
-      // Traffic calming (speed humps, tables, chicanes, etc.)
-      if (t.traffic_calming) trafficCalmingCount++;
-
-      // Hostile road types (high traffic stress — penalty)
-      if (
-        t.highway === "trunk" || t.highway === "primary" ||
-        t.highway === "motorway" || t.highway === "trunk_link" ||
-        t.highway === "primary_link" || t.highway === "motorway_link"
-      ) hostileRoadCount++;
+      // Motorboat zones — safety penalty
+      if (t.motorboat === "yes" || t.motorboat === "designated") motorBoatCount++;
     }
 
     return {
-      parkCount, waterCount, cyclewayCount, greenCount,
-      litCount, segregatedCount, roughSurfaceCount,
-      friendlyRoadCount, trafficCalmingCount, hostileRoadCount,
+      parkCount, waterCount, waterwayCount, greenCount,
+      litCount, calmWaterCount, rapidCount,
+      launchCount, portageCount, motorBoatCount,
       partial: false,
     };
   } catch (err) {

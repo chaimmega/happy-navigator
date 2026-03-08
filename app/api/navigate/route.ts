@@ -5,7 +5,7 @@ import Anthropic from "@anthropic-ai/sdk";
 export const maxDuration = 30;
 export const runtime = "nodejs";
 import { geocode } from "../../lib/nominatim";
-import { getBikeRoutes } from "../../lib/osrm";
+import { getCanoeRoutes } from "../../lib/osrm";
 import { getHappinessSignals } from "../../lib/overpass";
 import { getRouteElevation } from "../../lib/elevation";
 import { computeHappyScore } from "../../lib/happiness";
@@ -62,31 +62,31 @@ async function callAI(
     happyScore: r.happyScore,
     parks: r.signals.parkCount,
     water: r.signals.waterCount,
-    cycleways: r.signals.cyclewayCount,
+    waterways: r.signals.waterwayCount,
     greenSpaces: r.signals.greenCount,
     litSegments: r.signals.litCount,
-    separatedTracks: r.signals.segregatedCount,
-    friendlyRoads: r.signals.friendlyRoadCount,
-    trafficCalming: r.signals.trafficCalmingCount,
-    hostileRoads: r.signals.hostileRoadCount,
-    roughSurfaces: r.signals.roughSurfaceCount,
+    calmWater: r.signals.calmWaterCount,
+    boatLaunches: r.signals.launchCount,
+    portagePoints: r.signals.portageCount,
+    motorBoatZones: r.signals.motorBoatCount,
+    rapids: r.signals.rapidCount,
     elevationGainM: r.elevationGainM ?? null,
     partialData: r.signals.partial,
   }));
 
-  const prompt = `You are a friendly cycling route advisor helping someone find their happiest bike route.
+  const prompt = `You are a friendly canoe route advisor helping someone find their happiest canoe route.
 
 Route: ${startName} → ${endName}
 
 Candidate routes scored from OpenStreetMap data:
 ${JSON.stringify(summary, null, 2)}
 
-The Happy Score (0–100) reflects: parks, water features, dedicated cycleways, green spaces, street lighting, separated cycle tracks, and friendly roads (living streets, bicycle roads) per km — minus penalties for hostile traffic roads, rough surfaces, and steep elevation gain.
+The Happy Score (0–100) reflects: parks, water features, dedicated waterways, green spaces, street lighting, calm water sections, and boat launch access per km — minus penalties for motorboat traffic zones, rapids, and steep portage terrain.
 
 Task:
 1. Confirm or select the best "Happy Route" (highest score is a good default, but use judgement based on all factors).
-2. Write 2–4 short, friendly, specific bullet points explaining WHY it's the happy route (mention specific features like lighting, separated lanes, parks, or traffic stress if notable).
-3. If data suggests interesting stops (parks, riverside paths, café areas near the route), add 1–3 "suggestedStops".
+2. Write 2–4 short, friendly, specific bullet points explaining WHY it's the happy route (mention specific features like waterways, calm stretches, parks along the bank, portage points, or motorboat traffic if notable).
+3. If data suggests interesting stops (parks along the bank, scenic viewpoints, picnic areas, put-in/take-out points), add 1–3 "suggestedStops".
 
 Respond with ONLY valid JSON — no markdown fences, no extra text:
 {
@@ -248,7 +248,7 @@ export async function POST(req: NextRequest) {
   // ── 3. Fetch routes from OSRM ───────────────────────────────────────────────
   let osrmRoutes;
   try {
-    osrmRoutes = await getBikeRoutes(
+    osrmRoutes = await getCanoeRoutes(
       { lat: startGeo.lat, lng: startGeo.lng },
       { lat: endGeo.lat, lng: endGeo.lng },
       viaCoords

@@ -3,18 +3,18 @@ export interface Coordinates {
   lng: number;
 }
 
-/** Raw signals collected from OSM Overpass for a route */
+/** Raw signals collected from OSM Overpass for a canoe route */
 export interface HappinessSignals {
   parkCount: number;
   waterCount: number;
-  cyclewayCount: number;
+  waterwayCount: number;   // waterway sections near route (rivers, canals, streams)
   greenCount: number;
-  litCount: number;           // ways with lit=yes (street lighting)
-  segregatedCount: number;    // ways with cycleway=track (physically separated)
-  roughSurfaceCount: number;  // ways with gravel/dirt/cobblestone etc.
-  friendlyRoadCount: number;  // living_street + pedestrian + bicycle_road
-  trafficCalmingCount: number; // traffic_calming=* (speed bumps, tables, etc.)
-  hostileRoadCount: number;   // trunk/primary/motorway near route (penalty)
+  litCount: number;           // ways with lit=yes (lighting along bank)
+  calmWaterCount: number;     // sheltered/calm water sections (lakes, ponds)
+  rapidCount: number;         // rapids = difficulty penalty
+  launchCount: number;        // boat launches / put-in points
+  portageCount: number;       // portage access points
+  motorBoatCount: number;     // motor boat traffic zones (penalty)
   /** true when Overpass timed out / errored — scores are estimated */
   partial: boolean;
 }
@@ -22,17 +22,17 @@ export interface HappinessSignals {
 /** Per-category score contributions, each capped at their max */
 export interface ScoreBreakdown {
   parks: number;        // 0–30
-  cycleways: number;    // 0–25
+  waterways: number;    // 0–25
   water: number;        // 0–20
   green: number;        // 0–15
   lit: number;          // 0–10
-  segregated: number;   // 0–15
-  friendlyRoad: number; // 0–8
-  trafficCalming: number; // 0–5
+  calmWater: number;    // 0–15 (sheltered/calm water sections)
+  launch: number;       // 0–8  (boat launches / put-in points)
+  portage: number;      // 0–5  (portage access points)
   base: number;         // always 5
-  roughSurface: number; // 0–15 (penalty magnitude, subtracted from score)
+  rapids: number;       // 0–15 (penalty magnitude, subtracted from score)
   elevation: number;    // 0–20 (penalty magnitude, subtracted from score)
-  hostileRoad: number;  // 0–12 (penalty magnitude, subtracted from score)
+  motorBoat: number;    // 0–12 (penalty magnitude, motor boat zones)
 }
 
 /** A route from OSRM, enriched with happiness data */

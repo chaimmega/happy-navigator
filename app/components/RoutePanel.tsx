@@ -30,11 +30,11 @@ function fmtElev(gainM: number, metric: boolean): string {
 }
 
 // ─── Calories & CO2 estimates ─────────────────────────────────────────────────
-// Calories: ~8 MET × 70 kg × hours ≈ 560 × hours (moderate cycling)
+// Calories: ~4 MET × 70 kg × hours ≈ 280 × hours (moderate paddling)
 // CO2 saved vs car: avg petrol car ≈ 120 g CO₂/km
 
 function estimateCalories(durationS: number): number {
-  return Math.round(560 * (durationS / 3600));
+  return Math.round(280 * (durationS / 3600));
 }
 
 function estimateCO2Saved(distanceM: number): string {
@@ -118,19 +118,24 @@ function ComparisonStrip({
 
 // ─── GPX export ───────────────────────────────────────────────────────────────
 
+function escapeXml(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&apos;");
+}
+
 function exportGPX(route: ScoredRoute, startName: string, endName: string) {
   const trackPoints = route.geometry
     .map(([lng, lat]) => `      <trkpt lat="${lat.toFixed(6)}" lon="${lng.toFixed(6)}"></trkpt>`)
     .join("\n");
 
+  const safeName = escapeXml(`${startName} to ${endName}`);
   const gpx = `<?xml version="1.0" encoding="UTF-8"?>
 <gpx version="1.1" creator="Happy Navigator" xmlns="http://www.topografix.com/GPX/1/1">
   <metadata>
-    <name>${startName} to ${endName}</name>
+    <name>${safeName}</name>
     <desc>Happy Score: ${route.happyScore}/100</desc>
   </metadata>
   <trk>
-    <name>${startName} to ${endName}</name>
+    <name>${safeName}</name>
     <trkseg>
 ${trackPoints}
     </trkseg>
@@ -151,19 +156,19 @@ ${trackPoints}
 // ─── Score breakdown bar ──────────────────────────────────────────────────────
 
 const BREAKDOWN_SEGMENTS: {
-  key: keyof Omit<ScoreBreakdown, "roughSurface" | "elevation" | "hostileRoad">;
+  key: keyof Omit<ScoreBreakdown, "rapids" | "elevation" | "motorBoat">;
   color: string;
   label: string;
 }[] = [
-  { key: "parks",          color: "bg-emerald-400", label: "Parks" },
-  { key: "cycleways",      color: "bg-violet-400",  label: "Cycleways" },
-  { key: "water",          color: "bg-sky-400",     label: "Water" },
-  { key: "green",          color: "bg-lime-400",    label: "Green" },
-  { key: "segregated",     color: "bg-cyan-400",    label: "Separated" },
-  { key: "friendlyRoad",   color: "bg-teal-400",    label: "Friendly" },
-  { key: "trafficCalming", color: "bg-blue-300",    label: "Calmed" },
-  { key: "lit",            color: "bg-amber-400",   label: "Lit" },
-  { key: "base",           color: "bg-gray-300",    label: "Base" },
+  { key: "parks",     color: "bg-emerald-400", label: "Parks" },
+  { key: "waterways", color: "bg-blue-400",    label: "Waterways" },
+  { key: "water",     color: "bg-sky-400",     label: "Water" },
+  { key: "green",     color: "bg-lime-400",    label: "Green" },
+  { key: "calmWater", color: "bg-sky-300",     label: "Calm Water" },
+  { key: "launch",    color: "bg-teal-400",    label: "Launch" },
+  { key: "portage",   color: "bg-indigo-300",  label: "Portage" },
+  { key: "lit",       color: "bg-amber-400",   label: "Lit" },
+  { key: "base",      color: "bg-gray-300",    label: "Base" },
 ];
 
 function ScoreBar({ breakdown, total }: { breakdown: ScoreBreakdown; total: number }) {
@@ -193,16 +198,16 @@ function ScoreBar({ breakdown, total }: { breakdown: ScoreBreakdown; total: numb
             </span>
           )
         )}
-        {breakdown.roughSurface > 0 && (
+        {breakdown.rapids > 0 && (
           <span className="flex items-center gap-1 text-[10px] text-orange-500">
             <span className="w-2 h-2 rounded-full bg-orange-400 inline-block" />
-            Rough −{breakdown.roughSurface}
+            Rapids −{breakdown.rapids}
           </span>
         )}
-        {breakdown.hostileRoad > 0 && (
+        {breakdown.motorBoat > 0 && (
           <span className="flex items-center gap-1 text-[10px] text-red-500">
             <span className="w-2 h-2 rounded-full bg-red-400 inline-block" />
-            Traffic −{breakdown.hostileRoad}
+            Motorboat −{breakdown.motorBoat}
           </span>
         )}
         {breakdown.elevation > 0 && (
@@ -249,6 +254,11 @@ export default function RoutePanel({
   useMetric,
 }: RoutePanelProps) {
   const selectedRoute = routes.find((r) => r.id === selectedRouteId);
+
+  // Pre-compute type labels once (avoids O(n²) re-computation in the render loop)
+  const routeTypeLabels = new Map(
+    routes.map((r) => [r.id, getRouteTypeLabel(r, routes)])
+  );
 
   return (
     <div className="space-y-5">
@@ -318,7 +328,7 @@ export default function RoutePanel({
           const isSelected = route.id === selectedRouteId;
           const isBest = route.id === bestRouteId;
           const color = ROUTE_COLORS[i % ROUTE_COLORS.length];
-          const typeLabel = getRouteTypeLabel(route, routes);
+          const typeLabel = routeTypeLabels.get(route.id) ?? null;
           const calories = estimateCalories(route.duration);
           const co2 = estimateCO2Saved(route.distance);
 
@@ -366,8 +376,8 @@ export default function RoutePanel({
                 {route.elevationGainM != null && (
                   <span className="text-amber-600">{fmtElev(route.elevationGainM, useMetric)}</span>
                 )}
-                <span title="Estimated calories burned (70 kg rider)">🔥 ~{calories} kcal</span>
-                <span title="CO₂ saved vs driving a petrol car" className="text-emerald-600">
+                <span title="Estimated calories burned paddling (70 kg paddler)">🔥 ~{calories} kcal</span>
+                <span title="CO₂ saved vs driving to the put-in" className="text-emerald-600">
                   🌱 saves ~{co2} CO₂
                 </span>
               </div>
@@ -377,25 +387,25 @@ export default function RoutePanel({
 
               {/* Signal badges */}
               <div className="mt-2.5 flex flex-wrap gap-1.5">
-                <Badge show={route.signals.parkCount > 0}          bg="bg-green-100 text-green-700"   label={`🌳 ${route.signals.parkCount} park${route.signals.parkCount !== 1 ? "s" : ""}`} />
-                <Badge show={route.signals.waterCount > 0}         bg="bg-sky-100 text-sky-700"       label={`💧 ${route.signals.waterCount} water`} />
-                <Badge show={route.signals.cyclewayCount > 0}      bg="bg-violet-100 text-violet-700" label={`🚴 ${route.signals.cyclewayCount} cycle paths`} />
-                <Badge show={route.signals.greenCount > 0}         bg="bg-lime-100 text-lime-700"     label={`🌿 ${route.signals.greenCount} green`} />
-                <Badge show={route.signals.litCount > 0}           bg="bg-amber-100 text-amber-700"   label={`💡 ${route.signals.litCount} lit`} />
-                <Badge show={route.signals.segregatedCount > 0}    bg="bg-cyan-100 text-cyan-700"     label={`🛤️ ${route.signals.segregatedCount} separated`} />
-                <Badge show={route.signals.friendlyRoadCount > 0}  bg="bg-teal-100 text-teal-700"     label={`🏘️ ${route.signals.friendlyRoadCount} friendly`} />
-                <Badge show={route.signals.trafficCalmingCount > 0} bg="bg-blue-100 text-blue-600"   label={`🚦 ${route.signals.trafficCalmingCount} calmed`} />
-                <Badge show={route.signals.hostileRoadCount > 0}   bg="bg-red-100 text-red-600"       label={`⚠️ ${route.signals.hostileRoadCount} busy roads`} />
-                <Badge show={route.signals.roughSurfaceCount > 0}  bg="bg-orange-100 text-orange-700" label={`🪨 ${route.signals.roughSurfaceCount} rough`} />
+                <Badge show={route.signals.parkCount > 0}       bg="bg-green-100 text-green-700"   label={`🌳 ${route.signals.parkCount} park${route.signals.parkCount !== 1 ? "s" : ""}`} />
+                <Badge show={route.signals.waterCount > 0}      bg="bg-sky-100 text-sky-700"       label={`💧 ${route.signals.waterCount} water`} />
+                <Badge show={route.signals.waterwayCount > 0}   bg="bg-blue-100 text-blue-700"     label={`🌊 ${route.signals.waterwayCount} waterways`} />
+                <Badge show={route.signals.greenCount > 0}      bg="bg-lime-100 text-lime-700"     label={`🌿 ${route.signals.greenCount} green`} />
+                <Badge show={route.signals.litCount > 0}        bg="bg-amber-100 text-amber-700"   label={`💡 ${route.signals.litCount} lit`} />
+                <Badge show={route.signals.calmWaterCount > 0}  bg="bg-cyan-100 text-cyan-700"     label={`🏊 ${route.signals.calmWaterCount} calm water`} />
+                <Badge show={route.signals.launchCount > 0}     bg="bg-teal-100 text-teal-700"     label={`⛵ ${route.signals.launchCount} launches`} />
+                <Badge show={route.signals.portageCount > 0}    bg="bg-indigo-100 text-indigo-600" label={`🛶 ${route.signals.portageCount} portage`} />
+                <Badge show={route.signals.motorBoatCount > 0}  bg="bg-red-100 text-red-600"       label={`🚤 ${route.signals.motorBoatCount} motorboats`} />
+                <Badge show={route.signals.rapidCount > 0}      bg="bg-orange-100 text-orange-700" label={`🌀 ${route.signals.rapidCount} rapids`} />
                 {route.signals.partial && (
                   <Badge show bg="bg-gray-100 text-gray-400" label="~ partial data" />
                 )}
                 {!route.signals.parkCount && !route.signals.waterCount &&
-                  !route.signals.cyclewayCount && !route.signals.greenCount &&
-                  !route.signals.litCount && !route.signals.segregatedCount &&
-                  !route.signals.friendlyRoadCount && (
+                  !route.signals.waterwayCount && !route.signals.greenCount &&
+                  !route.signals.litCount && !route.signals.calmWaterCount &&
+                  !route.signals.launchCount && (
                     <span className="text-xs text-gray-400 italic">
-                      No nearby green/cycle features found
+                      No nearby waterway features found
                     </span>
                   )}
               </div>
@@ -411,7 +421,7 @@ export default function RoutePanel({
                     <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                     </svg>
-                    Export GPX for Garmin / Wahoo
+                    Export GPX for GPS device
                   </button>
                 </div>
               )}
@@ -421,16 +431,16 @@ export default function RoutePanel({
       </div>
 
       {/* ── Elevation profile for selected route ── */}
-      {selectedRoute?.elevationPoints &&
-        selectedRoute.elevationPoints.length >= 2 &&
-        selectedRoute.elevationGainM != null && (
-          <ElevationProfile
-            points={selectedRoute.elevationPoints}
-            gainM={selectedRoute.elevationGainM}
-            distanceMi={selectedRoute.distance / 1609.344}
-            useMetric={useMetric}
-          />
-        )}
+      {selectedRoute && (
+        selectedRoute.elevationPoints && selectedRoute.elevationPoints.length >= 2 && selectedRoute.elevationGainM != null
+          ? <ElevationProfile
+              points={selectedRoute.elevationPoints}
+              gainM={selectedRoute.elevationGainM}
+              distanceMi={selectedRoute.distance / 1609.344}
+              useMetric={useMetric}
+            />
+          : <p className="text-xs text-gray-400 text-center py-2">Elevation data unavailable</p>
+      )}
     </div>
   );
 }

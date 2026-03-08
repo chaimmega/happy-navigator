@@ -12,10 +12,11 @@ export interface OSRMRoute {
 }
 
 /**
- * Fetch bike route alternatives between two points (with optional via-point) using OSRM.
+ * Fetch canoe route alternatives between two points (with optional via-point) using OSRM.
+ * Uses the foot profile — best available for waterside / portage routes.
  * When a via-point is supplied, alternatives are still requested but OSRM may return fewer.
  */
-export async function getBikeRoutes(
+export async function getCanoeRoutes(
   start: Coordinates,
   end: Coordinates,
   via?: Coordinates
@@ -25,12 +26,12 @@ export async function getBikeRoutes(
     : `${start.lng},${start.lat};${end.lng},${end.lat}`;
 
   const url =
-    `${OSRM_BASE}/route/v1/bike/${coordParts}` +
+    `${OSRM_BASE}/route/v1/foot/${coordParts}` +
     `?alternatives=true&overview=full&geometries=geojson&steps=false`;
 
   const resp = await fetch(url, {
     signal: AbortSignal.timeout(15000),
-    next: { revalidate: 7200 }, // road network rarely changes within 2 hours
+    next: { revalidate: 7200 }, // waterway network rarely changes within 2 hours
   } as RequestInit);
 
   if (!resp.ok) {

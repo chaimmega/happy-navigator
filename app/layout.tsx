@@ -2,10 +2,10 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Happy Navigator — Find your happiest bike route",
+  title: "Happy Navigator — Find your happiest canoe route",
   description:
-    "Enter two locations and discover the most scenic, green, and cycle-friendly route — scored by parks, cycleways, lighting, traffic stress, and elevation. Powered by OpenStreetMap + AI.",
-  keywords: ["bike route", "cycling", "happy route", "OpenStreetMap", "route planner"],
+    "Enter a put-in and take-out location and discover the most scenic, green, and paddle-friendly canoe route — scored by waterways, parks, calm water, lighting, portage difficulty, and motorboat traffic. Powered by OpenStreetMap + AI.",
+  keywords: ["canoe route", "paddling", "kayaking", "happy route", "OpenStreetMap", "route planner"],
 };
 
 export const viewport: Viewport = {

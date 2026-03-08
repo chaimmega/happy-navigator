@@ -20,8 +20,8 @@ const MapView = dynamic(() => import("./components/MapView"), {
 
 const LOADING_STEPS = [
   { label: "Geocoding your locations…",           icon: "📍" },
-  { label: "Fetching bike route alternatives…",   icon: "🛤️" },
-  { label: "Scanning parks, cycleways & surfaces…", icon: "🌿" },
+  { label: "Fetching canoe route alternatives…",   icon: "🚣" },
+  { label: "Scanning waterways, parks & portage points…", icon: "🌿" },
   { label: "AI is finding your happiest route…",  icon: "✨" },
 ];
 
@@ -87,7 +87,7 @@ function MapPlaceholder() {
       <div className="text-7xl mb-4 opacity-50" aria-hidden>🗺️</div>
       <p className="text-lg font-semibold text-gray-500">Enter locations to find your happy route</p>
       <p className="text-sm mt-1.5 text-gray-400 text-center max-w-xs leading-relaxed">
-        We score each route by parks, cycleways, water, lighting, surface quality and traffic stress
+        We score each route by waterways, parks, calm water, lighting, portage difficulty and motorboat traffic
         — then ask AI to explain why one is happiest.
       </p>
     </div>
@@ -263,13 +263,13 @@ export default function Home() {
     <main className="h-screen overflow-hidden bg-gray-50 flex flex-col">
       {/* ── Header ── */}
       <header className="bg-white border-b border-gray-200 px-4 sm:px-6 py-3 flex items-center gap-3 flex-shrink-0">
-        <span className="text-3xl" aria-hidden>🚴</span>
+        <span className="text-3xl" aria-hidden>🛶</span>
         <div className="min-w-0">
           <h1 className="text-base sm:text-lg font-bold text-gray-900 leading-tight truncate">
             Happy Navigator
           </h1>
           <p className="text-xs text-gray-400 leading-tight hidden sm:block">
-            Score bike routes by parks, cycleways &amp; scenic spots
+            Score canoe routes by waterways, parks &amp; scenic paddling
           </p>
         </div>
         <div className="ml-auto flex items-center gap-2">
@@ -367,10 +367,10 @@ export default function Home() {
           {/* Idle hint */}
           {!result && !loading && !error && (
             <div className="flex-1 flex flex-col items-center justify-center text-center px-6 gap-2 text-gray-400">
-              <span className="text-4xl" aria-hidden>🛤️</span>
-              <p className="text-sm text-gray-500">Enter a start and end location to begin.</p>
+              <span className="text-4xl" aria-hidden>🚣</span>
+              <p className="text-sm text-gray-500">Enter put-in and take-out locations to begin.</p>
               <p className="text-xs">
-                Try: <em>Central Park, New York</em> → <em>Brooklyn Bridge</em>
+                Try: <em>put-in</em> → <em>take-out</em>
               </p>
             </div>
           )}

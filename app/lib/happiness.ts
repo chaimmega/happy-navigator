@@ -1,37 +1,38 @@
 import type { HappinessSignals, ScoreBreakdown } from "../types";
 
 const WEIGHTS = {
-  parks:          { multiplier: 12, cap: 30 },
-  cycleways:      { multiplier: 10, cap: 25 },
-  water:          { multiplier: 8,  cap: 20 },
-  green:          { multiplier: 5,  cap: 15 },
-  lit:            { multiplier: 4,  cap: 10 },
-  segregated:     { multiplier: 6,  cap: 15 },
-  friendlyRoad:   { multiplier: 3,  cap: 8  }, // living_street / pedestrian / bicycle_road
-  trafficCalming: { multiplier: 2,  cap: 5  }, // speed humps, tables, chicanes
-  roughSurface:   { multiplier: 5,  cap: 15 }, // penalty
-  elevation:      { multiplier: 3,  cap: 20 }, // penalty per km of ascent
-  hostileRoad:    { multiplier: 4,  cap: 12 }, // penalty for trunk/primary/motorway nearby
+  parks:     { multiplier: 12, cap: 30 },
+  waterways: { multiplier: 10, cap: 25 }, // dedicated waterways
+  water:     { multiplier: 8,  cap: 20 },
+  green:     { multiplier: 5,  cap: 15 },
+  lit:       { multiplier: 4,  cap: 10 },
+  calmWater: { multiplier: 6,  cap: 15 }, // sheltered/calm water sections
+  launch:    { multiplier: 3,  cap: 8  }, // boat launch / put-in access
+  portage:   { multiplier: 2,  cap: 5  }, // portage access points
+  rapids:    { multiplier: 5,  cap: 15 }, // penalty
+  elevation: { multiplier: 3,  cap: 20 }, // penalty per km of ascent
+  motorBoat: { multiplier: 4,  cap: 12 }, // penalty for motor boat traffic zones
 } as const;
 
 /**
- * Compute a 0–100 Happy Score from OSM signals and optional elevation data.
+ * Compute a 0–100 Happy Score from OSM signals and optional elevation data
+ * for a canoe route.
  *
  * Positive contributors (max pts):
  *   Base          →  5 pts  (any routable path)
- *   Parks         → 30 pts  (shade, scenery, safety)
- *   Cycleways     → 25 pts  (dedicated bike infra)
- *   Water         → 20 pts  (rivers/lakes = scenic)
- *   Green         → 15 pts  (forests, meadows)
- *   Segregated    → 15 pts  (physically separated tracks)
- *   Lit           → 10 pts  (safe at any hour)
- *   FriendlyRoad  →  8 pts  (living_street, pedestrian zones, bicycle roads)
- *   TrafficCalming →  5 pts  (calmed streets = safer cycling)
+ *   Parks         → 30 pts  (shade, scenery along the bank)
+ *   Waterways     → 25 pts  (dedicated waterway infrastructure)
+ *   Water         → 20 pts  (rivers/lakes = scenic paddling)
+ *   Green         → 15 pts  (forests, meadows along bank)
+ *   Calm Water    → 15 pts  (sheltered/calm water sections)
+ *   Lit           → 10 pts  (lighting along bank)
+ *   Launch        →  8 pts  (boat launches, put-in points)
+ *   Portage       →  5 pts  (portage access points)
  *
  * Penalties (max deduction):
- *   Rough surface → −15 pts  (gravel, dirt, cobblestones)
- *   Elevation     → −20 pts  (steep ascent per km)
- *   Hostile road  → −12 pts  (trunk/primary/motorway nearby = high stress)
+ *   Rapids        → −15 pts  (whitewater difficulty)
+ *   Elevation     → −20 pts  (steep portage terrain)
+ *   Motor Boat    → −12 pts  (motor boat traffic zones = hazard)
  *
  * All raw counts normalised per km. Final score clamped to 0–100.
  */
@@ -42,42 +43,42 @@ export function computeHappyScore(
 ): { score: number; breakdown: ScoreBreakdown } {
   const norm = Math.max(distanceKm, 0.5);
 
-  const parks         = Math.min((signals.parkCount       / norm) * WEIGHTS.parks.multiplier,         WEIGHTS.parks.cap);
-  const cycleways     = Math.min((signals.cyclewayCount   / norm) * WEIGHTS.cycleways.multiplier,     WEIGHTS.cycleways.cap);
-  const water         = Math.min((signals.waterCount      / norm) * WEIGHTS.water.multiplier,         WEIGHTS.water.cap);
-  const green         = Math.min((signals.greenCount      / norm) * WEIGHTS.green.multiplier,         WEIGHTS.green.cap);
-  const lit           = Math.min((signals.litCount        / norm) * WEIGHTS.lit.multiplier,           WEIGHTS.lit.cap);
-  const segregated    = Math.min((signals.segregatedCount / norm) * WEIGHTS.segregated.multiplier,    WEIGHTS.segregated.cap);
-  const friendlyRoad  = Math.min((signals.friendlyRoadCount   / norm) * WEIGHTS.friendlyRoad.multiplier,   WEIGHTS.friendlyRoad.cap);
-  const trafficCalming = Math.min((signals.trafficCalmingCount / norm) * WEIGHTS.trafficCalming.multiplier, WEIGHTS.trafficCalming.cap);
-  const base          = 5;
+  const parks     = Math.min((signals.parkCount      / norm) * WEIGHTS.parks.multiplier,     WEIGHTS.parks.cap);
+  const waterways = Math.min((signals.waterwayCount  / norm) * WEIGHTS.waterways.multiplier, WEIGHTS.waterways.cap);
+  const water     = Math.min((signals.waterCount     / norm) * WEIGHTS.water.multiplier,     WEIGHTS.water.cap);
+  const green     = Math.min((signals.greenCount     / norm) * WEIGHTS.green.multiplier,     WEIGHTS.green.cap);
+  const lit       = Math.min((signals.litCount       / norm) * WEIGHTS.lit.multiplier,       WEIGHTS.lit.cap);
+  const calmWater = Math.min((signals.calmWaterCount / norm) * WEIGHTS.calmWater.multiplier, WEIGHTS.calmWater.cap);
+  const launch    = Math.min((signals.launchCount    / norm) * WEIGHTS.launch.multiplier,    WEIGHTS.launch.cap);
+  const portage   = Math.min((signals.portageCount   / norm) * WEIGHTS.portage.multiplier,   WEIGHTS.portage.cap);
+  const base      = 5;
 
   // Penalties
-  const roughSurface = Math.min((signals.roughSurfaceCount  / norm) * WEIGHTS.roughSurface.multiplier, WEIGHTS.roughSurface.cap);
-  const elevation    = elevationGainM != null
+  const rapids   = Math.min((signals.rapidCount     / norm) * WEIGHTS.rapids.multiplier,   WEIGHTS.rapids.cap);
+  const elevation = elevationGainM != null
     ? Math.min((elevationGainM / norm) * WEIGHTS.elevation.multiplier, WEIGHTS.elevation.cap)
     : 0;
-  const hostileRoad  = Math.min((signals.hostileRoadCount / norm) * WEIGHTS.hostileRoad.multiplier, WEIGHTS.hostileRoad.cap);
+  const motorBoat = Math.min((signals.motorBoatCount / norm) * WEIGHTS.motorBoat.multiplier, WEIGHTS.motorBoat.cap);
 
-  const raw   = base + parks + cycleways + water + green + lit + segregated + friendlyRoad + trafficCalming
-              - roughSurface - elevation - hostileRoad;
+  const raw   = base + parks + waterways + water + green + lit + calmWater + launch + portage
+              - rapids - elevation - motorBoat;
   const score = Math.round(Math.max(0, Math.min(raw, 100)));
 
   return {
     score,
     breakdown: {
-      parks:          Math.round(parks),
-      cycleways:      Math.round(cycleways),
-      water:          Math.round(water),
-      green:          Math.round(green),
-      lit:            Math.round(lit),
-      segregated:     Math.round(segregated),
-      friendlyRoad:   Math.round(friendlyRoad),
-      trafficCalming: Math.round(trafficCalming),
+      parks:     Math.round(parks),
+      waterways: Math.round(waterways),
+      water:     Math.round(water),
+      green:     Math.round(green),
+      lit:       Math.round(lit),
+      calmWater: Math.round(calmWater),
+      launch:    Math.round(launch),
+      portage:   Math.round(portage),
       base,
-      roughSurface:   Math.round(roughSurface),
-      elevation:      Math.round(elevation),
-      hostileRoad:    Math.round(hostileRoad),
+      rapids:    Math.round(rapids),
+      elevation: Math.round(elevation),
+      motorBoat: Math.round(motorBoat),
     },
   };
 }

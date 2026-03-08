@@ -2,7 +2,7 @@
 
 ## Project overview
 
-Next.js 15 (App Router) + TypeScript + Tailwind web app that scores bike routes for "happiness" using free OpenStreetMap APIs and a single Claude Haiku AI call per search.
+Next.js 15 (App Router) + TypeScript + Tailwind web app that scores canoe routes for "happiness" using free OpenStreetMap APIs and a single Claude Haiku AI call per search.
 
 ## Common commands
 
@@ -18,8 +18,8 @@ npm run lint      # ESLint
 | File | Purpose |
 |---|---|
 | `app/api/navigate/route.ts` | **Main server pipeline** — geocode → OSRM → Overpass → score → AI |
-| `app/lib/osrm.ts` | Bike routing via OSRM public server (free, no key) |
-| `app/lib/overpass.ts` | OSM feature queries — parks, water, cycleways |
+| `app/lib/osrm.ts` | Canoe routing via OSRM public server (free, no key) |
+| `app/lib/overpass.ts` | OSM feature queries — parks, water, waterways, launches |
 | `app/lib/happiness.ts` | Weighted 0–100 scoring formula |
 | `app/lib/nominatim.ts` | Geocoding via Nominatim (free, no key) |
 | `app/lib/parseGoogleMapsUrl.ts` | Parse Google Maps directions URLs |
@@ -38,18 +38,18 @@ npm run lint      # ESLint
 | API | Base URL | Key? | Timeout | Notes |
 |---|---|---|---|---|
 | Nominatim | `nominatim.openstreetmap.org` | No | 8 s | Requires `User-Agent` header |
-| OSRM | `router.project-osrm.org` | No | 15 s | Bike profile: `/route/v1/bike/` |
+| OSRM | `router.project-osrm.org` | No | 15 s | Foot profile: `/route/v1/foot/` |
 | Overpass | `overpass-api.de/api/interpreter` | No | 14 s | Conservative use — 1 compound query per route |
 | Anthropic | SDK | Yes (`ANTHROPIC_API_KEY`) | SDK default | Model: `claude-haiku-4-5-20251001` |
 
 ## Happy Score formula
 
 ```
-score = 10 (base)
-      + min((parks    / distKm) × 12,  30)   ← weights in happiness.ts
-      + min((cycleways / distKm) × 10,  25)
-      + min((water    / distKm) × 8,   20)
-      + min((green    / distKm) × 5,   15)
+score = 5 (base)
+      + min((parks     / distKm) × 12,  30)   ← weights in happiness.ts
+      + min((waterways / distKm) × 10,  25)
+      + min((water     / distKm) × 8,   20)
+      + min((green     / distKm) × 5,   15)
 ```
 
 To adjust weights, edit `app/lib/happiness.ts` only — nowhere else.
