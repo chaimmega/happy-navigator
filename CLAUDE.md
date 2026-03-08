@@ -2,7 +2,7 @@
 
 ## Project overview
 
-Next.js 15 (App Router) + TypeScript + Tailwind web app that scores canoe routes for "happiness" using free OpenStreetMap APIs and a single Claude Haiku AI call per search.
+Next.js 15 (App Router) + TypeScript + Tailwind web app that scores canoe routes for "happiness" using Google Maps APIs, OpenStreetMap Overpass for feature detection, and a single Claude Haiku AI call per search.
 
 ## Common commands
 
@@ -17,28 +17,34 @@ npm run lint      # ESLint
 
 | File | Purpose |
 |---|---|
-| `app/api/navigate/route.ts` | **Main server pipeline** — geocode → OSRM → Overpass → score → AI |
-| `app/lib/osrm.ts` | Canoe routing via OSRM public server (free, no key) |
+| `app/api/navigate/route.ts` | **Main server pipeline** — geocode → Directions → Overpass → score → AI |
+| `app/lib/osrm.ts` | Canoe routing via Google Directions API (server-side, walking profile) |
 | `app/lib/overpass.ts` | OSM feature queries — parks, water, waterways, launches |
 | `app/lib/happiness.ts` | Weighted 0–100 scoring formula |
-| `app/lib/nominatim.ts` | Geocoding via Nominatim (free, no key) |
+| `app/lib/nominatim.ts` | Geocoding via Google Geocoding API (server-side) |
 | `app/lib/parseGoogleMapsUrl.ts` | Parse Google Maps directions URLs |
-| `app/components/MapView.tsx` | Leaflet map — always loaded via `dynamic(..., { ssr: false })` |
+| `app/components/MapView.tsx` | Google Maps — always loaded via `dynamic(..., { ssr: false })` |
+| `app/components/GoogleMapsProvider.tsx` | Loads Google Maps JS API globally with Places library |
+| `app/components/PlaceAutocomplete.tsx` | Google Places Autocomplete with session tokens |
 | `app/types/index.ts` | All shared TypeScript interfaces |
 
 ## Architecture rules
 
-- **All external API calls must be server-side** (`app/api/` or `app/lib/`). Never call Overpass, OSRM, Nominatim, or the AI from browser code.
-- **MapView must remain client-only** — Leaflet doesn't support SSR. The `dynamic(() => import('./components/MapView'), { ssr: false })` pattern in `page.tsx` is intentional; don't remove it.
+- **All external API calls must be server-side** (`app/api/` or `app/lib/`). Never call Overpass, Directions, Geocoding, or the AI from browser code. Only Places Autocomplete runs client-side (it requires the Maps JS API).
+- **MapView must remain client-only** — Google Maps JS API doesn't support SSR. The `dynamic(() => import('./components/MapView'), { ssr: false })` pattern in `page.tsx` is intentional; don't remove it.
+- **GoogleMapsProvider wraps the entire app** — loads the Maps script once with the `places` library. Don't load the script elsewhere.
 - **One AI call per search** — the `callAI()` in `route.ts` is the only place to call the LLM. Keep it cheap (Haiku, ≤500 tokens).
 - **Overpass must degrade gracefully** — always return `{ ..., partial: true }` on timeout/error, never throw. Routes still display with partial scores.
+- **Server-side caching** — geocoding (24h TTL, 500 entries) and routes (2h TTL, 200 entries) are cached in-memory LRU to reduce API costs.
 
 ## External API constraints
 
 | API | Base URL | Key? | Timeout | Notes |
 |---|---|---|---|---|
-| Nominatim | `nominatim.openstreetmap.org` | No | 8 s | Requires `User-Agent` header |
-| OSRM | `router.project-osrm.org` | No | 15 s | Foot profile: `/route/v1/foot/` |
+| Google Geocoding | `maps.googleapis.com/maps/api/geocode/json` | Yes | 8 s | Server-side, cached 24h |
+| Google Directions | `maps.googleapis.com/maps/api/directions/json` | Yes | 15 s | Walking mode, cached 2h |
+| Google Places | Client-side via Maps JS API | Yes (`NEXT_PUBLIC_`) | — | Uses session tokens for cost savings |
+| Google Maps JS | Client-side | Yes (`NEXT_PUBLIC_`) | — | Loaded by GoogleMapsProvider |
 | Overpass | `overpass-api.de/api/interpreter` | No | 14 s | Conservative use — 1 compound query per route |
 | Anthropic | SDK | Yes (`ANTHROPIC_API_KEY`) | SDK default | Model: `claude-haiku-4-5-20251001` |
 
@@ -59,15 +65,17 @@ To adjust weights, edit `app/lib/happiness.ts` only — nowhere else.
 - **TypeScript strict mode** — no `any`, no `as unknown as X` hacks. All types live in `app/types/index.ts`.
 - **No CSS files other than `globals.css`** — use Tailwind utility classes only.
 - **Server lib functions are pure** — `nominatim.ts`, `osrm.ts`, `overpass.ts`, `happiness.ts` have no side-effects and no Next.js imports. Keep them that way so they're easy to unit-test.
-- **Geometry coordinate order** — OSRM and GeoJSON use `[lng, lat]`. Leaflet uses `[lat, lng]`. The swap happens in `MapView.tsx` when converting `route.geometry` to Leaflet positions. Don't swap anywhere else.
+- **Geometry coordinate order** — Directions API returns encoded polylines decoded to `[lat, lng]`, then swapped to `[lng, lat]` in `osrm.ts`. Google Maps uses `{ lat, lng }` objects. The swap to Google Maps format happens in `MapView.tsx`. Don't swap anywhere else.
 - Route IDs are their 0-based index in the sorted `scoredRoutes` array (sorted descending by score). `bestRouteId` is set by the AI or defaults to `scoredRoutes[0].id`.
 
 ## Environment variables
 
 ```bash
-AI_PROVIDER=anthropic          # or "openai"
-ANTHROPIC_API_KEY=sk-ant-...   # required for default provider
-# OPENAI_API_KEY=sk-...        # only if AI_PROVIDER=openai (+ npm install openai)
+AI_PROVIDER=anthropic                        # or "openai"
+ANTHROPIC_API_KEY=sk-ant-...                 # required for default provider
+# OPENAI_API_KEY=sk-...                      # only if AI_PROVIDER=openai
+NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=...          # Maps JS API + Places (client-exposed)
+# GOOGLE_MAPS_SERVER_KEY=...                 # Optional: separate key for Geocoding + Directions (server-only)
 ```
 
 ## Relevant Claude Code skills
