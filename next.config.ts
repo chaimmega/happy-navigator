@@ -1,11 +1,22 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // react-leaflet and React 18 Strict Mode are incompatible:
-  // Strict Mode double-invokes effects in dev, causing Leaflet to throw
-  // "Map container is already initialized" on the second mount.
-  // Disabling Strict Mode here is the standard fix — does not affect production.
-  reactStrictMode: false,
+  reactStrictMode: true,
+  headers: async () => [
+    {
+      source: "/(.*)",
+      headers: [
+        { key: "X-Content-Type-Options", value: "nosniff" },
+        { key: "X-Frame-Options", value: "DENY" },
+        { key: "X-XSS-Protection", value: "1; mode=block" },
+        { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+        {
+          key: "Permissions-Policy",
+          value: "camera=(), microphone=(), geolocation=(self)",
+        },
+      ],
+    },
+  ],
 };
 
 export default nextConfig;

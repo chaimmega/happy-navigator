@@ -1,4 +1,5 @@
-const API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? "";
+// Prefer a server-only key; fall back to the public key if not set
+const API_KEY = process.env.GOOGLE_MAPS_SERVER_KEY ?? process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? "";
 const GEOCODE_BASE = "https://maps.googleapis.com/maps/api/geocode/json";
 
 export interface GeocodedLocation {
