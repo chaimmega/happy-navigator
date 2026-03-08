@@ -15,12 +15,6 @@
   }
 }
 
-/* ── Leaflet ── */
-/* Prevent Next.js from fighting Leaflet's own z-index stack */
-.leaflet-container {
-  z-index: 0;
-}
-
 /* ── Sidebar scrollbar ── */
 /* Thin, unobtrusive scrollbar on WebKit/Blink browsers */
 .sidebar-scroll::-webkit-scrollbar {
@@ -44,6 +38,6 @@
 
 /* ── Map pin mode cursor ── */
 /* Applied when the user is in "click to set location" mode */
-.map-pin-mode .leaflet-container {
+.map-pin-mode .gm-style {
   cursor: crosshair !important;
 }

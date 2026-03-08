@@ -1,81 +1,19 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { searchPlaces, type PhotonResult } from "../lib/photon";
 
-// ─── Place type → emoji mapping (Komoot / Citymapper style) ──────────────────
+// ─── Types ────────────────────────────────────────────────────────────────────
 
-const TYPE_ICON: Record<string, string> = {
-  // Green / nature
-  park: "🌳",
-  garden: "🌳",
-  wood: "🌲",
-  forest: "🌲",
-  nature_reserve: "🌿",
-  beach: "🏖️",
-  water: "💧",
-  // Transport
-  station: "🚉",
-  halt: "🚉",
-  tram_stop: "🚊",
-  bus_stop: "🚌",
-  ferry_terminal: "⛴️",
-  airport: "✈️",
-  // Cities / admin
-  city: "🏙️",
-  town: "🏘️",
-  village: "🏡",
-  hamlet: "🏡",
-  suburb: "📍",
-  quarter: "📍",
-  neighbourhood: "📍",
-  // POI
-  museum: "🏛️",
-  gallery: "🎨",
-  artwork: "🎨",
-  theatre: "🎭",
-  cinema: "🎬",
-  stadium: "🏟️",
-  attraction: "🎡",
-  viewpoint: "👁️",
-  // Food / drink
-  restaurant: "🍽️",
-  cafe: "☕",
-  bar: "🍺",
-  pub: "🍺",
-  fast_food: "🍔",
-  // Accommodation
-  hotel: "🏨",
-  hostel: "🏨",
-  // Health
-  hospital: "🏥",
-  pharmacy: "💊",
-  // Education
-  school: "🏫",
-  university: "🎓",
-  college: "🎓",
-  library: "📚",
-  // Shopping
-  supermarket: "🛒",
-  marketplace: "🛒",
-  // Default
-  default: "📍",
-};
-
-function placeIcon(osm_value: string): string {
-  return TYPE_ICON[osm_value] ?? TYPE_ICON.default;
+interface PlacePrediction {
+  displayName: string;
+  subtitle: string;
+  placeId: string;
 }
-
-// ─── Component ────────────────────────────────────────────────────────────────
 
 export interface PlaceValue {
   text: string;
   coords?: { lat: number; lng: number };
 }
-
-type Hint =
-  | { type: "did-you-mean"; result: PhotonResult }
-  | { type: "no-results"; query: string };
 
 interface PlaceAutocompleteProps {
   label: string;
@@ -87,6 +25,8 @@ interface PlaceAutocompleteProps {
   id?: string;
 }
 
+// ─── Component ────────────────────────────────────────────────────────────────
+
 export default function PlaceAutocomplete({
   label,
   placeholder,
@@ -96,33 +36,43 @@ export default function PlaceAutocomplete({
   autoFocus,
   id,
 }: PlaceAutocompleteProps) {
-  const [results, setResults] = useState<PhotonResult[]>([]);
+  const [results, setResults] = useState<PlacePrediction[]>([]);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
   const [activeIdx, setActiveIdx] = useState(-1);
-  const [hint, setHint] = useState<Hint | null>(null);
+  const [noResults, setNoResults] = useState(false);
 
-  const abortRef = useRef<AbortController | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
-  // Track the last query that returned results for "did you mean" hint
-  const lastResultsRef = useRef<PhotonResult[]>([]);
+  const autocompleteService = useRef<google.maps.places.AutocompleteService | null>(null);
+  const geocoder = useRef<google.maps.Geocoder | null>(null);
+
+  // Initialize services when google is available
+  useEffect(() => {
+    const init = () => {
+      if (typeof google !== "undefined" && google.maps?.places) {
+        autocompleteService.current = new google.maps.places.AutocompleteService();
+        geocoder.current = new google.maps.Geocoder();
+      }
+    };
+    init();
+    // Retry after a short delay in case Google Maps script hasn't loaded yet
+    const timer = setTimeout(init, 1000);
+    return () => clearTimeout(timer);
+  }, []);
 
   // Close dropdown when user clicks outside
   useEffect(() => {
     function onMouseDown(e: MouseEvent) {
       if (!containerRef.current?.contains(e.target as Node)) {
-        if (open && lastResultsRef.current.length > 0 && !value.coords) {
-          setHint({ type: "did-you-mean", result: lastResultsRef.current[0] });
-        }
         setOpen(false);
       }
     }
     document.addEventListener("mousedown", onMouseDown);
     return () => document.removeEventListener("mousedown", onMouseDown);
-  }, [open, value.coords]);
+  }, []);
 
   // Scroll active item into view
   useEffect(() => {
@@ -133,58 +83,82 @@ export default function PlaceAutocomplete({
 
   const triggerSearch = useCallback((q: string) => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    abortRef.current?.abort();
 
     if (q.trim().length < 2) {
       setResults([]);
       setOpen(false);
       setLoading(false);
-      setHint(null);
-      lastResultsRef.current = [];
+      setNoResults(false);
       return;
     }
 
     setLoading(true);
-    setHint(null);
+    setNoResults(false);
 
-    debounceRef.current = setTimeout(async () => {
-      const controller = new AbortController();
-      abortRef.current = controller;
-
-      const res = await searchPlaces(q, controller.signal);
-
-      if (!controller.signal.aborted) {
-        setResults(res);
-        lastResultsRef.current = res;
-        if (res.length > 0) {
-          setOpen(true);
-          setHint(null);
-        } else {
-          setOpen(false);
-          setHint({ type: "no-results", query: q.trim() });
-        }
-        setActiveIdx(-1);
+    debounceRef.current = setTimeout(() => {
+      if (!autocompleteService.current) {
         setLoading(false);
+        return;
       }
+
+      autocompleteService.current.getPlacePredictions(
+        { input: q },
+        (predictions, status) => {
+          if (
+            status === google.maps.places.PlacesServiceStatus.OK &&
+            predictions &&
+            predictions.length > 0
+          ) {
+            setResults(
+              predictions.slice(0, 6).map((p) => ({
+                displayName: p.structured_formatting.main_text,
+                subtitle: p.structured_formatting.secondary_text || "",
+                placeId: p.place_id,
+              }))
+            );
+            setOpen(true);
+            setNoResults(false);
+          } else {
+            setResults([]);
+            setOpen(false);
+            setNoResults(true);
+          }
+          setActiveIdx(-1);
+          setLoading(false);
+        }
+      );
     }, 280);
   }, []);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const text = e.target.value;
     onChange({ text, coords: undefined });
-    setHint(null);
+    setNoResults(false);
     triggerSearch(text);
   };
 
-  const commit = (result: PhotonResult) => {
-    const text = [result.displayName, result.subtitle].filter(Boolean).join(", ");
-    onChange({ text, coords: { lat: result.lat, lng: result.lng } });
-    setOpen(false);
-    setResults([]);
-    setActiveIdx(-1);
-    setHint(null);
-    lastResultsRef.current = [];
-  };
+  const commit = useCallback(
+    (result: PlacePrediction) => {
+      if (!geocoder.current) return;
+
+      geocoder.current.geocode({ placeId: result.placeId }, (results, status) => {
+        if (status === google.maps.GeocoderStatus.OK && results && results.length > 0) {
+          const loc = results[0].geometry.location;
+          const text = [result.displayName, result.subtitle].filter(Boolean).join(", ");
+          onChange({ text, coords: { lat: loc.lat(), lng: loc.lng() } });
+        } else {
+          const text = [result.displayName, result.subtitle].filter(Boolean).join(", ");
+          onChange({ text, coords: undefined });
+        }
+      });
+
+      setOpen(false);
+      setResults([]);
+      setActiveIdx(-1);
+      setNoResults(false);
+    },
+    [onChange]
+  );
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (!open || !results.length) return;
@@ -205,9 +179,6 @@ export default function PlaceAutocomplete({
         }
         break;
       case "Escape":
-        if (lastResultsRef.current.length > 0 && !value.coords) {
-          setHint({ type: "did-you-mean", result: lastResultsRef.current[0] });
-        }
         setOpen(false);
         break;
     }
@@ -217,8 +188,7 @@ export default function PlaceAutocomplete({
     onChange({ text: "", coords: undefined });
     setResults([]);
     setOpen(false);
-    setHint(null);
-    lastResultsRef.current = [];
+    setNoResults(false);
     inputRef.current?.focus();
   };
 
@@ -262,13 +232,11 @@ export default function PlaceAutocomplete({
 
         {/* Right-side indicators */}
         <div className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
-          {/* Resolved coords tick */}
           {hasCoords && !loading && (
             <span className="text-emerald-500 text-xs font-bold" title="Location resolved">
               ✓
             </span>
           )}
-          {/* Spinner while fetching */}
           {loading && (
             <svg
               className="h-4 w-4 animate-spin text-gray-400"
@@ -290,7 +258,6 @@ export default function PlaceAutocomplete({
               />
             </svg>
           )}
-          {/* Clear button */}
           {value.text && !loading && (
             <button
               type="button"
@@ -314,12 +281,12 @@ export default function PlaceAutocomplete({
         >
           {results.map((result, i) => (
             <li
-              key={i}
+              key={result.placeId}
               id={id ? `${id}-option-${i}` : undefined}
               role="option"
               aria-selected={i === activeIdx}
               onMouseDown={(e) => {
-                e.preventDefault(); // prevent input blur before commit
+                e.preventDefault();
                 commit(result);
               }}
               onMouseEnter={() => setActiveIdx(i)}
@@ -328,7 +295,7 @@ export default function PlaceAutocomplete({
               } ${i > 0 ? "border-t border-gray-100" : ""}`}
             >
               <span className="text-base flex-shrink-0 mt-0.5" aria-hidden>
-                {placeIcon(result.osm_value)}
+                📍
               </span>
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium text-gray-900 truncate">
@@ -343,36 +310,12 @@ export default function PlaceAutocomplete({
         </ul>
       )}
 
-      {/* Did you mean / No results hints */}
-      {!open && hint && (
+      {/* No results hint */}
+      {!open && noResults && (
         <div className="mt-1.5">
-          {hint.type === "did-you-mean" && (
-            <p className="text-xs text-gray-500 flex items-center gap-1 flex-wrap">
-              <span>Did you mean</span>
-              <button
-                type="button"
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  commit(hint.result);
-                }}
-                className="inline-flex items-center gap-1 text-emerald-600 hover:text-emerald-700 font-medium underline underline-offset-2 transition-colors"
-              >
-                <span aria-hidden>{placeIcon(hint.result.osm_value)}</span>
-                <span>
-                  {hint.result.displayName}
-                  {hint.result.subtitle ? `, ${hint.result.subtitle}` : ""}
-                </span>
-              </button>
-              <span>?</span>
-            </p>
-          )}
-          {hint.type === "no-results" && (
-            <p className="text-xs text-amber-600 flex items-center gap-1">
-              <span>No places found for</span>
-              <em>&ldquo;{hint.query}&rdquo;</em>
-              <span>— try a different spelling.</span>
-            </p>
-          )}
+          <p className="text-xs text-amber-600 flex items-center gap-1">
+            <span>No places found — try a different spelling.</span>
+          </p>
         </div>
       )}
     </div>

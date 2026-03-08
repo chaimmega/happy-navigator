@@ -1,9 +1,5 @@
-const NOMINATIM_BASE = "https://nominatim.openstreetmap.org";
-
-const HEADERS = {
-  "User-Agent": "HappyNavigator/1.0 (opensource demo)",
-  Accept: "application/json",
-};
+const API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? "";
+const GEOCODE_BASE = "https://maps.googleapis.com/maps/api/geocode/json";
 
 export interface GeocodedLocation {
   lat: number;
@@ -15,9 +11,8 @@ export interface GeocodedLocation {
 const COORD_RE = /^(-?\d{1,3}\.\d+)\s*,\s*(-?\d{1,3}\.\d+)$/;
 
 /**
- * Geocode a free-text address via Nominatim (OSM).
- * If the string looks like a "lat,lng" coordinate pair, uses the /reverse
- * endpoint instead of /search (handles parsed Google Maps coordinate URLs).
+ * Geocode a free-text address via Google Geocoding API.
+ * If the string looks like a "lat,lng" coordinate pair, uses reverse geocoding.
  * Returns null if no result found or the request fails.
  */
 export async function geocode(
@@ -34,54 +29,69 @@ export async function geocode(
 }
 
 async function forwardGeocode(address: string): Promise<GeocodedLocation | null> {
-  const url = `${NOMINATIM_BASE}/search?q=${encodeURIComponent(address)}&format=json&limit=1&addressdetails=0`;
+  const url = `${GEOCODE_BASE}?address=${encodeURIComponent(address)}&key=${API_KEY}`;
 
   try {
     const resp = await fetch(url, {
-      headers: HEADERS,
       signal: AbortSignal.timeout(8000),
-      next: { revalidate: 3600 }, // geocoded addresses rarely change
+      next: { revalidate: 3600 },
     } as RequestInit);
     if (!resp.ok) {
-      console.error("[nominatim] HTTP error:", resp.status);
+      console.error("[geocode] HTTP error:", resp.status);
       return null;
     }
-    const data: Array<{ lat: string; lon: string; display_name: string }> = await resp.json();
-    if (!data.length) return null;
+    const data: {
+      status: string;
+      results: Array<{
+        formatted_address: string;
+        geometry: { location: { lat: number; lng: number } };
+      }>;
+    } = await resp.json();
+
+    if (data.status !== "OK" || !data.results.length) return null;
+
+    const r = data.results[0];
     return {
-      lat: parseFloat(data[0].lat),
-      lng: parseFloat(data[0].lon),
-      displayName: data[0].display_name,
+      lat: r.geometry.location.lat,
+      lng: r.geometry.location.lng,
+      displayName: r.formatted_address,
     };
   } catch (err) {
-    console.error("[nominatim] fetch error:", err);
+    console.error("[geocode] fetch error:", err);
     return null;
   }
 }
 
 async function reverseGeocode(lat: number, lng: number): Promise<GeocodedLocation | null> {
-  const url = `${NOMINATIM_BASE}/reverse?lat=${lat}&lon=${lng}&format=json`;
+  const url = `${GEOCODE_BASE}?latlng=${lat},${lng}&key=${API_KEY}`;
 
   try {
     const resp = await fetch(url, {
-      headers: HEADERS,
       signal: AbortSignal.timeout(8000),
       next: { revalidate: 3600 },
     } as RequestInit);
     if (!resp.ok) {
-      console.error("[nominatim] reverse HTTP error:", resp.status);
+      console.error("[geocode] reverse HTTP error:", resp.status);
       return null;
     }
-    const data: { lat: string; lon: string; display_name: string; error?: string } =
-      await resp.json();
-    if (data.error) return null;
+    const data: {
+      status: string;
+      results: Array<{
+        formatted_address: string;
+        geometry: { location: { lat: number; lng: number } };
+      }>;
+    } = await resp.json();
+
+    if (data.status !== "OK" || !data.results.length) return null;
+
+    const r = data.results[0];
     return {
-      lat: parseFloat(data.lat),
-      lng: parseFloat(data.lon),
-      displayName: data.display_name,
+      lat: r.geometry.location.lat,
+      lng: r.geometry.location.lng,
+      displayName: r.formatted_address,
     };
   } catch (err) {
-    console.error("[nominatim] reverse fetch error:", err);
+    console.error("[geocode] reverse fetch error:", err);
     return null;
   }
 }

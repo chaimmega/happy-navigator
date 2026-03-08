@@ -68,7 +68,7 @@ export interface NavigateResponse {
 export interface NavigateRequest {
   start?: string;
   end?: string;
-  /** Pre-resolved coords from Photon autocomplete — skips Nominatim geocoding */
+  /** Pre-resolved coords from Places autocomplete — skips server geocoding */
   startCoords?: { lat: number; lng: number };
   endCoords?: { lat: number; lng: number };
   googleMapsUrl?: string;

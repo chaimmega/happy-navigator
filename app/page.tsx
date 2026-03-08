@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import dynamic from "next/dynamic";
+import GoogleMapsProvider from "./components/GoogleMapsProvider";
 import SearchForm, { saveRecentSearch } from "./components/SearchForm";
 import RoutePanel from "./components/RoutePanel";
 import type { NavigateResponse } from "./types";
@@ -260,6 +261,7 @@ export default function Home() {
   };
 
   return (
+    <GoogleMapsProvider>
     <main className="h-screen overflow-hidden bg-gray-50 flex flex-col">
       {/* ── Header ── */}
       <header className="bg-white border-b border-gray-200 px-4 sm:px-6 py-3 flex items-center gap-3 flex-shrink-0">
@@ -300,7 +302,7 @@ export default function Home() {
           )}
           <div className="hidden sm:flex items-center gap-1.5 text-xs text-gray-400">
             <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block" />
-            OpenStreetMap + OSRM
+            Google Maps
           </div>
         </div>
       </header>
@@ -393,5 +395,6 @@ export default function Home() {
         </div>
       </div>
     </main>
+    </GoogleMapsProvider>
   );
 }
