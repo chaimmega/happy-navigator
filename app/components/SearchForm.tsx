@@ -139,8 +139,12 @@ export default function SearchForm({
         setStartPlace({ text: "My location", coords: { lat, lng } });
         setGpsLoading(false);
       },
-      () => {
-        setGpsError("Location access denied. Enable it in browser settings.");
+      (err) => {
+        const msg =
+          err.code === err.TIMEOUT
+            ? "Location timed out. Try again or enter an address."
+            : "Location access denied. Enable it in browser settings.";
+        setGpsError(msg);
         setGpsLoading(false);
       },
       { timeout: 8000 }

@@ -333,12 +333,15 @@ export default function RoutePanel({
           const co2 = estimateCO2Saved(route.distance);
 
           return (
-            <button
+            <div
               key={route.id}
+              role="button"
+              tabIndex={0}
               onClick={() => onSelectRoute(route.id)}
+              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelectRoute(route.id); } }}
               aria-label={`Select ${ROUTE_LABELS[i]}, Happy Score ${route.happyScore} out of 100`}
               aria-pressed={isSelected}
-              className={`w-full text-left rounded-xl border-2 p-3.5 transition-all ${
+              className={`w-full text-left rounded-xl border-2 p-3.5 transition-all cursor-pointer ${
                 isSelected
                   ? "bg-white shadow-md"
                   : "border-transparent bg-gray-50 hover:bg-white hover:border-gray-200"
@@ -425,7 +428,7 @@ export default function RoutePanel({
                   </button>
                 </div>
               )}
-            </button>
+            </div>
           );
         })}
       </div>

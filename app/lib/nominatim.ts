@@ -25,7 +25,10 @@ export async function geocode(
 ): Promise<GeocodedLocation | null> {
   const coordMatch = address.trim().match(COORD_RE);
   if (coordMatch) {
-    return reverseGeocode(parseFloat(coordMatch[1]), parseFloat(coordMatch[2]));
+    const lat = parseFloat(coordMatch[1]);
+    const lng = parseFloat(coordMatch[2]);
+    if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
+    return reverseGeocode(lat, lng);
   }
   return forwardGeocode(address);
 }
