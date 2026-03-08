@@ -48,6 +48,7 @@ export default function PlaceAutocomplete({
   const listRef = useRef<HTMLUListElement>(null);
   const autocompleteService = useRef<google.maps.places.AutocompleteService | null>(null);
   const geocoder = useRef<google.maps.Geocoder | null>(null);
+  const sessionToken = useRef<google.maps.places.AutocompleteSessionToken | null>(null);
 
   // Initialize services when google is available
   useEffect(() => {
@@ -55,6 +56,7 @@ export default function PlaceAutocomplete({
       if (typeof google !== "undefined" && google.maps?.places) {
         autocompleteService.current = new google.maps.places.AutocompleteService();
         geocoder.current = new google.maps.Geocoder();
+        sessionToken.current = new google.maps.places.AutocompleteSessionToken();
       }
     };
     init();
@@ -102,7 +104,7 @@ export default function PlaceAutocomplete({
       }
 
       autocompleteService.current.getPlacePredictions(
-        { input: q },
+        { input: q, sessionToken: sessionToken.current ?? undefined },
         (predictions, status) => {
           if (
             status === google.maps.places.PlacesServiceStatus.OK &&
@@ -156,6 +158,10 @@ export default function PlaceAutocomplete({
       setResults([]);
       setActiveIdx(-1);
       setNoResults(false);
+      // Session token is consumed after selection — create a new one for the next search
+      if (typeof google !== "undefined") {
+        sessionToken.current = new google.maps.places.AutocompleteSessionToken();
+      }
     },
     [onChange]
   );

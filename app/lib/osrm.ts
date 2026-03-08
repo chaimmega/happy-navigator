@@ -4,6 +4,26 @@ import { Coordinates } from "../types";
 const API_KEY = process.env.GOOGLE_MAPS_SERVER_KEY ?? process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? "";
 const DIRECTIONS_BASE = "https://maps.googleapis.com/maps/api/directions/json";
 
+// ─── Simple LRU cache for route results ──────────────────────────────────────
+const MAX_CACHE = 200;
+const CACHE_TTL = 2 * 60 * 60 * 1000; // 2 hours
+const routeCache = new Map<string, { result: OSRMRoute[]; expires: number }>();
+
+function getRouteCached(key: string): OSRMRoute[] | undefined {
+  const entry = routeCache.get(key);
+  if (!entry) return undefined;
+  if (Date.now() > entry.expires) { routeCache.delete(key); return undefined; }
+  return entry.result;
+}
+
+function setRouteCache(key: string, result: OSRMRoute[]) {
+  if (routeCache.size >= MAX_CACHE) {
+    const oldest = routeCache.keys().next().value;
+    if (oldest !== undefined) routeCache.delete(oldest);
+  }
+  routeCache.set(key, { result, expires: Date.now() + CACHE_TTL });
+}
+
 export interface OSRMRoute {
   geometry: {
     coordinates: [number, number][]; // [lng, lat] GeoJSON order
@@ -63,6 +83,10 @@ export async function getCanoeRoutes(
   end: Coordinates,
   via?: Coordinates
 ): Promise<OSRMRoute[]> {
+  const cacheKey = `${start.lat.toFixed(5)},${start.lng.toFixed(5)}|${end.lat.toFixed(5)},${end.lng.toFixed(5)}${via ? `|${via.lat.toFixed(5)},${via.lng.toFixed(5)}` : ""}`;
+  const cached = getRouteCached(cacheKey);
+  if (cached) return cached;
+
   const params = new URLSearchParams({
     origin: `${start.lat},${start.lng}`,
     destination: `${end.lat},${end.lng}`,
@@ -101,7 +125,7 @@ export async function getCanoeRoutes(
     throw new Error(`Google Directions error: ${data.status}`);
   }
 
-  return data.routes.slice(0, 3).map((route) => {
+  const routes = data.routes.slice(0, 3).map((route) => {
     // Decode polyline: Google returns [lat, lng], we need [lng, lat] for GeoJSON order
     const latLngPoints = decodePolyline(route.overview_polyline.points);
     const coordinates: [number, number][] = latLngPoints.map(([lat, lng]) => [lng, lat]);
@@ -116,4 +140,7 @@ export async function getCanoeRoutes(
       duration,
     };
   });
+
+  setRouteCache(cacheKey, routes);
+  return routes;
 }
