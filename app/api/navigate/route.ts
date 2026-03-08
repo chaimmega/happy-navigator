@@ -209,6 +209,12 @@ export async function POST(req: NextRequest) {
     preCoords?: { lat: number; lng: number }
   ): Promise<GeoResult | null> {
     if (preCoords) {
+      // If address looks like raw coords, reverse-geocode for a human-readable name
+      const looksLikeCoords = /^-?\d+\.\d+\s*,\s*-?\d+\.\d+$/.test(address.trim());
+      if (looksLikeCoords) {
+        const revGeo = await geocode(`${preCoords.lat},${preCoords.lng}`);
+        return { lat: preCoords.lat, lng: preCoords.lng, displayName: revGeo?.displayName ?? address };
+      }
       return { lat: preCoords.lat, lng: preCoords.lng, displayName: address };
     }
     return geocode(address);

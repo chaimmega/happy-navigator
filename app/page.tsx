@@ -141,6 +141,8 @@ export default function Home() {
   const [mapPinTarget, setMapPinTarget]   = useState<"start" | "end" | null>(null);
   const [mapPinPlace, setMapPinPlace]     = useState<PlaceValue | undefined>(undefined);
   const [pinLoading, setPinLoading]       = useState(false);
+  const [formStart, setFormStart]         = useState<PlaceValue | undefined>(undefined);
+  const [formEnd, setFormEnd]             = useState<PlaceValue | undefined>(undefined);
 
   const abortRef = useRef<AbortController | null>(null);
 
@@ -192,6 +194,10 @@ export default function Home() {
       const nav = json as NavigateResponse;
       setResult(nav);
       setSelectedRouteId(nav.bestRouteId);
+
+      // Populate form fields with resolved names (especially for URL-param searches)
+      setFormStart({ text: nav.startName, coords: nav.startCoords });
+      setFormEnd({ text: nav.endName, coords: nav.endCoords });
 
       // Save to recent searches
       if (nav.startCoords && nav.endCoords) {
@@ -324,6 +330,8 @@ export default function Home() {
               mapPinPlace={mapPinPlace}
               mapPinTarget={mapPinTarget ?? undefined}
               onClearMapPin={cancelMapPin}
+              initialStart={formStart}
+              initialEnd={formEnd}
             />
 
             {/* Map pin mode banner */}

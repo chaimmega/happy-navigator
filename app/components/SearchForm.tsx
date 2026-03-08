@@ -56,6 +56,8 @@ interface SearchFormProps {
   mapPinPlace?: PlaceValue;
   mapPinTarget?: "start" | "end";
   onClearMapPin?: () => void;
+  initialStart?: PlaceValue;
+  initialEnd?: PlaceValue;
 }
 
 export default function SearchForm({
@@ -64,6 +66,8 @@ export default function SearchForm({
   mapPinPlace,
   mapPinTarget,
   onClearMapPin,
+  initialStart,
+  initialEnd,
 }: SearchFormProps) {
   const [startPlace, setStartPlace] = useState<PlaceValue>({ text: "" });
   const [endPlace, setEndPlace] = useState<PlaceValue>({ text: "" });
@@ -79,6 +83,14 @@ export default function SearchForm({
   useEffect(() => {
     setRecentSearches(loadRecent());
   }, []);
+
+  // Populate form fields from parent (e.g., after URL-param search resolves names)
+  useEffect(() => {
+    if (initialStart) setStartPlace(initialStart);
+  }, [initialStart]);
+  useEffect(() => {
+    if (initialEnd) setEndPlace(initialEnd);
+  }, [initialEnd]);
 
   useEffect(() => {
     if (!mapPinPlace) return;
