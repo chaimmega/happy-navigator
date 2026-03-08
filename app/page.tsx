@@ -84,12 +84,13 @@ function LoadingSteps({ active }: { active: boolean }) {
 
 function MapPlaceholder() {
   return (
-    <div className="h-full flex flex-col items-center justify-center text-gray-400 select-none bg-gray-50">
-      <div className="text-7xl mb-4 opacity-50" aria-hidden>🗺️</div>
-      <p className="text-lg font-semibold text-gray-500">Enter locations to find your happy route</p>
-      <p className="text-sm mt-1.5 text-gray-400 text-center max-w-xs leading-relaxed">
-        We score each route by waterways, parks, calm water, lighting, portage difficulty and motorboat traffic
-        — then ask AI to explain why one is happiest.
+    <div className="h-full flex flex-col items-center justify-center text-gray-400 select-none bg-gradient-to-br from-emerald-50/50 to-gray-50">
+      <div className="w-20 h-20 rounded-3xl bg-emerald-100/60 flex items-center justify-center mb-5">
+        <span className="text-5xl opacity-70" aria-hidden>🗺️</span>
+      </div>
+      <p className="text-lg font-semibold text-gray-600 tracking-tight">Your happy route awaits</p>
+      <p className="text-sm mt-2 text-gray-400 text-center max-w-xs leading-relaxed">
+        Enter start and end locations to discover calmer, greener, more enjoyable canoe routes.
       </p>
     </div>
   );
@@ -103,11 +104,11 @@ function MetricToggle({ useMetric, onToggle }: { useMetric: boolean; onToggle: (
       type="button"
       onClick={onToggle}
       title={`Switch to ${useMetric ? "imperial" : "metric"} units`}
-      className="hidden sm:flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-gray-700 border border-gray-200 rounded-lg px-2.5 py-1 bg-white hover:bg-gray-50 transition-colors"
+      className="hidden sm:flex items-center gap-1.5 text-xs font-medium text-emerald-200 hover:text-white border border-emerald-600 rounded-lg px-2.5 py-1 bg-emerald-700/50 hover:bg-emerald-600/50 transition-colors"
     >
-      <span className={useMetric ? "text-emerald-600 font-bold" : ""}>km</span>
-      <span className="text-gray-300">/</span>
-      <span className={!useMetric ? "text-emerald-600 font-bold" : ""}>mi</span>
+      <span className={useMetric ? "text-white font-bold" : ""}>km</span>
+      <span className="text-emerald-400">/</span>
+      <span className={!useMetric ? "text-white font-bold" : ""}>mi</span>
     </button>
   );
 }
@@ -270,14 +271,16 @@ export default function Home() {
     <GoogleMapsProvider>
     <main className="h-screen overflow-hidden bg-gray-50 flex flex-col">
       {/* ── Header ── */}
-      <header className="bg-white border-b border-gray-200 px-4 sm:px-6 py-3 flex items-center gap-3 flex-shrink-0">
-        <span className="text-3xl" aria-hidden>🛶</span>
+      <header className="bg-gradient-to-r from-emerald-800 to-emerald-700 px-4 sm:px-6 py-3 flex items-center gap-3 flex-shrink-0 shadow-sm">
+        <div className="w-9 h-9 rounded-xl bg-white/15 flex items-center justify-center flex-shrink-0">
+          <span className="text-xl" aria-hidden>🛶</span>
+        </div>
         <div className="min-w-0">
-          <h1 className="text-base sm:text-lg font-bold text-gray-900 leading-tight truncate">
+          <h1 className="text-base sm:text-lg font-bold text-white leading-tight truncate tracking-tight">
             Happy Navigator
           </h1>
-          <p className="text-xs text-gray-400 leading-tight hidden sm:block">
-            Score canoe routes by waterways, parks &amp; scenic paddling
+          <p className="text-[11px] text-emerald-200 leading-tight hidden sm:block">
+            Discover calmer, greener, more enjoyable routes
           </p>
         </div>
         <div className="ml-auto flex items-center gap-2">
@@ -289,7 +292,7 @@ export default function Home() {
                 type="button"
                 onClick={() => setMapPinTarget("start")}
                 title="Click map to set start location"
-                className="text-[10px] text-gray-400 hover:text-emerald-600 border border-gray-200 rounded px-1.5 py-1 transition-colors bg-white"
+                className="text-[10px] text-emerald-200 hover:text-white border border-emerald-600 rounded px-1.5 py-1 transition-colors bg-emerald-700/50"
               >
                 📍 Pin start
               </button>
@@ -297,17 +300,17 @@ export default function Home() {
                 type="button"
                 onClick={() => setMapPinTarget("end")}
                 title="Click map to set end location"
-                className="text-[10px] text-gray-400 hover:text-emerald-600 border border-gray-200 rounded px-1.5 py-1 transition-colors bg-white"
+                className="text-[10px] text-emerald-200 hover:text-white border border-emerald-600 rounded px-1.5 py-1 transition-colors bg-emerald-700/50"
               >
                 📍 Pin end
               </button>
             </div>
           )}
           {pinLoading && (
-            <span className="text-xs text-gray-400 animate-pulse">Locating…</span>
+            <span className="text-xs text-emerald-200 animate-pulse">Locating…</span>
           )}
-          <div className="hidden sm:flex items-center gap-1.5 text-xs text-gray-400">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block" />
+          <div className="hidden sm:flex items-center gap-1.5 text-xs text-emerald-300/70">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block" />
             Google Maps
           </div>
         </div>
@@ -376,11 +379,13 @@ export default function Home() {
 
           {/* Idle hint */}
           {!result && !loading && !error && (
-            <div className="flex-1 flex flex-col items-center justify-center text-center px-6 gap-2 text-gray-400">
-              <span className="text-4xl" aria-hidden>🚣</span>
-              <p className="text-sm text-gray-500">Enter put-in and take-out locations to begin.</p>
-              <p className="text-xs">
-                Try: <em>put-in</em> → <em>take-out</em>
+            <div className="flex-1 flex flex-col items-center justify-center text-center px-8 gap-3 text-gray-400">
+              <div className="w-14 h-14 rounded-2xl bg-emerald-50 flex items-center justify-center">
+                <span className="text-3xl" aria-hidden>🚣</span>
+              </div>
+              <p className="text-sm font-medium text-gray-600">Enter put-in and take-out locations to begin</p>
+              <p className="text-xs text-gray-400 leading-relaxed max-w-[16rem]">
+                We&apos;ll find the most scenic canoe routes and score them for waterways, parks, and calm water.
               </p>
             </div>
           )}

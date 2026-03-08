@@ -319,7 +319,7 @@ export default function RoutePanel({
       />
 
       {/* ── Route cards ── */}
-      <div className="space-y-2">
+      <div className="space-y-2.5">
         <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest px-1">
           All routes — click to highlight on map
         </p>
@@ -332,6 +332,15 @@ export default function RoutePanel({
           const calories = estimateCalories(route.duration);
           const co2 = estimateCO2Saved(route.distance);
 
+          // Top 3 signal highlights for compact view
+          const highlights: string[] = [];
+          if (route.signals.parkCount > 0) highlights.push(`🌳 ${route.signals.parkCount} parks`);
+          if (route.signals.waterwayCount > 0) highlights.push(`🌊 ${route.signals.waterwayCount} waterways`);
+          if (route.signals.calmWaterCount > 0) highlights.push(`🏊 ${route.signals.calmWaterCount} calm water`);
+          if (route.signals.waterCount > 0 && highlights.length < 3) highlights.push(`💧 ${route.signals.waterCount} water`);
+          if (route.signals.greenCount > 0 && highlights.length < 3) highlights.push(`🌿 ${route.signals.greenCount} green`);
+          if (route.signals.launchCount > 0 && highlights.length < 3) highlights.push(`⛵ ${route.signals.launchCount} launches`);
+
           return (
             <div
               key={route.id}
@@ -341,81 +350,99 @@ export default function RoutePanel({
               onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelectRoute(route.id); } }}
               aria-label={`Select ${ROUTE_LABELS[i]}, Happy Score ${route.happyScore} out of 100`}
               aria-pressed={isSelected}
-              className={`w-full text-left rounded-xl border-2 p-3.5 transition-all cursor-pointer ${
+              className={`w-full text-left rounded-2xl border-2 p-4 transition-all duration-200 cursor-pointer ${
                 isSelected
-                  ? "bg-white shadow-md"
-                  : "border-transparent bg-gray-50 hover:bg-white hover:border-gray-200"
+                  ? "bg-white shadow-lg shadow-gray-200/50"
+                  : "border-transparent bg-gray-50/80 hover:bg-white hover:shadow-md hover:shadow-gray-100/50"
               }`}
               style={isSelected ? { borderColor: color } : {}}
             >
-              {/* Header */}
-              <div className="flex items-start justify-between gap-2">
-                <div className="flex items-center gap-2 min-w-0">
+              {/* Header row: name + badges + score ring */}
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5 min-w-0 flex-1">
                   <div
-                    className="w-2.5 h-2.5 rounded-full flex-shrink-0 mt-0.5"
+                    className="w-3 h-3 rounded-full flex-shrink-0"
                     style={{ backgroundColor: color }}
                   />
-                  <span className="font-semibold text-gray-900 text-sm truncate">
+                  <span className="font-semibold text-gray-900 text-[15px] tracking-tight truncate">
                     {ROUTE_LABELS[i]}
                   </span>
                   {isBest && (
                     <span className="text-[10px] font-bold bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full whitespace-nowrap flex-shrink-0">
-                      Happy Route ★
+                      Best Route ★
                     </span>
                   )}
                   {!isBest && typeLabel && (
-                    <span className="text-[10px] font-bold bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full whitespace-nowrap flex-shrink-0">
+                    <span className="text-[10px] font-bold bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full whitespace-nowrap flex-shrink-0">
                       {typeLabel}
                     </span>
                   )}
                 </div>
-                <HappyScore score={route.happyScore} size="sm" />
+                <HappyScore score={route.happyScore} size={isSelected ? "md" : "sm"} />
               </div>
 
-              {/* Stats */}
-              <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-500">
-                <span>📏 {fmtDist(route.distance, useMetric)}</span>
-                <span>⏱ {fmtTime(route.duration)}</span>
+              {/* Key stats — always visible, compact */}
+              <div className="mt-2.5 flex items-center gap-3 text-xs text-gray-500">
+                <span className="font-medium">{fmtDist(route.distance, useMetric)}</span>
+                <span className="text-gray-300">·</span>
+                <span>{fmtTime(route.duration)}</span>
                 {route.elevationGainM != null && (
-                  <span className="text-amber-600">{fmtElev(route.elevationGainM, useMetric)}</span>
+                  <>
+                    <span className="text-gray-300">·</span>
+                    <span className="text-amber-600">{fmtElev(route.elevationGainM, useMetric)}</span>
+                  </>
                 )}
-                <span title="Estimated calories burned paddling (70 kg paddler)">🔥 ~{calories} kcal</span>
-                <span title="CO₂ saved vs driving to the put-in" className="text-emerald-600">
-                  🌱 saves ~{co2} CO₂
-                </span>
               </div>
 
-              {/* Score breakdown bar */}
-              <ScoreBar breakdown={route.scoreBreakdown} total={route.happyScore} />
-
-              {/* Signal badges */}
-              <div className="mt-2.5 flex flex-wrap gap-1.5">
-                <Badge show={route.signals.parkCount > 0}       bg="bg-green-100 text-green-700"   label={`🌳 ${route.signals.parkCount} park${route.signals.parkCount !== 1 ? "s" : ""}`} />
-                <Badge show={route.signals.waterCount > 0}      bg="bg-sky-100 text-sky-700"       label={`💧 ${route.signals.waterCount} water`} />
-                <Badge show={route.signals.waterwayCount > 0}   bg="bg-blue-100 text-blue-700"     label={`🌊 ${route.signals.waterwayCount} waterways`} />
-                <Badge show={route.signals.greenCount > 0}      bg="bg-lime-100 text-lime-700"     label={`🌿 ${route.signals.greenCount} green`} />
-                <Badge show={route.signals.litCount > 0}        bg="bg-amber-100 text-amber-700"   label={`💡 ${route.signals.litCount} lit`} />
-                <Badge show={route.signals.calmWaterCount > 0}  bg="bg-cyan-100 text-cyan-700"     label={`🏊 ${route.signals.calmWaterCount} calm water`} />
-                <Badge show={route.signals.launchCount > 0}     bg="bg-teal-100 text-teal-700"     label={`⛵ ${route.signals.launchCount} launches`} />
-                <Badge show={route.signals.portageCount > 0}    bg="bg-indigo-100 text-indigo-600" label={`🛶 ${route.signals.portageCount} portage`} />
-                <Badge show={route.signals.motorBoatCount > 0}  bg="bg-red-100 text-red-600"       label={`🚤 ${route.signals.motorBoatCount} motorboats`} />
-                <Badge show={route.signals.rapidCount > 0}      bg="bg-orange-100 text-orange-700" label={`🌀 ${route.signals.rapidCount} rapids`} />
-                {route.signals.partial && (
-                  <Badge show bg="bg-gray-100 text-gray-400" label="~ partial data" />
-                )}
-                {!route.signals.parkCount && !route.signals.waterCount &&
-                  !route.signals.waterwayCount && !route.signals.greenCount &&
-                  !route.signals.litCount && !route.signals.calmWaterCount &&
-                  !route.signals.launchCount && (
-                    <span className="text-xs text-gray-400 italic">
-                      No nearby waterway features found
+              {/* Top signal highlights — compact chips */}
+              {highlights.length > 0 && (
+                <div className="mt-2.5 flex flex-wrap gap-1.5">
+                  {highlights.slice(0, 3).map((h, j) => (
+                    <span key={j} className="text-[11px] text-gray-500 bg-gray-100/80 px-2 py-0.5 rounded-full">
+                      {h}
                     </span>
-                  )}
-              </div>
+                  ))}
+                </div>
+              )}
+              {!highlights.length && route.signals.partial && (
+                <p className="mt-2 text-xs text-gray-400 italic">Partial data — features may be underreported</p>
+              )}
+              {!highlights.length && !route.signals.partial && (
+                <p className="mt-2 text-xs text-gray-400 italic">No nearby waterway features found</p>
+              )}
 
-              {/* GPX export */}
+              {/* Expanded details — only for selected card */}
               {isSelected && (
-                <div className="mt-2.5 pt-2.5 border-t border-gray-100">
+                <div className="mt-3 pt-3 border-t border-gray-100 space-y-3">
+                  {/* Score breakdown bar */}
+                  <ScoreBar breakdown={route.scoreBreakdown} total={route.happyScore} />
+
+                  {/* Full signal badges */}
+                  <div className="flex flex-wrap gap-1.5">
+                    <Badge show={route.signals.parkCount > 0}       bg="bg-green-100 text-green-700"   label={`🌳 ${route.signals.parkCount} park${route.signals.parkCount !== 1 ? "s" : ""}`} />
+                    <Badge show={route.signals.waterCount > 0}      bg="bg-sky-100 text-sky-700"       label={`💧 ${route.signals.waterCount} water`} />
+                    <Badge show={route.signals.waterwayCount > 0}   bg="bg-blue-100 text-blue-700"     label={`🌊 ${route.signals.waterwayCount} waterways`} />
+                    <Badge show={route.signals.greenCount > 0}      bg="bg-lime-100 text-lime-700"     label={`🌿 ${route.signals.greenCount} green`} />
+                    <Badge show={route.signals.litCount > 0}        bg="bg-amber-100 text-amber-700"   label={`💡 ${route.signals.litCount} lit`} />
+                    <Badge show={route.signals.calmWaterCount > 0}  bg="bg-cyan-100 text-cyan-700"     label={`🏊 ${route.signals.calmWaterCount} calm water`} />
+                    <Badge show={route.signals.launchCount > 0}     bg="bg-teal-100 text-teal-700"     label={`⛵ ${route.signals.launchCount} launches`} />
+                    <Badge show={route.signals.portageCount > 0}    bg="bg-indigo-100 text-indigo-600" label={`🛶 ${route.signals.portageCount} portage`} />
+                    <Badge show={route.signals.motorBoatCount > 0}  bg="bg-red-100 text-red-600"       label={`🚤 ${route.signals.motorBoatCount} motorboats`} />
+                    <Badge show={route.signals.rapidCount > 0}      bg="bg-orange-100 text-orange-700" label={`🌀 ${route.signals.rapidCount} rapids`} />
+                    {route.signals.partial && (
+                      <Badge show bg="bg-gray-100 text-gray-400" label="~ partial data" />
+                    )}
+                  </div>
+
+                  {/* Extra stats */}
+                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-gray-400">
+                    <span title="Estimated calories burned paddling (70 kg paddler)">🔥 ~{calories} kcal</span>
+                    <span title="CO₂ saved vs driving to the put-in" className="text-emerald-500">
+                      🌱 saves ~{co2} CO₂
+                    </span>
+                  </div>
+
+                  {/* GPX export */}
                   <button
                     type="button"
                     onClick={(e) => { e.stopPropagation(); exportGPX(route, startName, endName); }}
@@ -424,7 +451,7 @@ export default function RoutePanel({
                     <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                     </svg>
-                    Export GPX for GPS device
+                    Export GPX
                   </button>
                 </div>
               )}
