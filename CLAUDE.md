@@ -34,6 +34,8 @@ npm run lint      # ESLint
 - **MapView must remain client-only** — Google Maps JS API doesn't support SSR. The `dynamic(() => import('./components/MapView'), { ssr: false })` pattern in `page.tsx` is intentional; don't remove it.
 - **GoogleMapsProvider wraps the entire app** — loads the Maps script once with the `places` library. Don't load the script elsewhere.
 - **One AI call per search** — the `callAI()` in `route.ts` is the only place to call the LLM. Keep it cheap (Haiku, ≤500 tokens).
+- **AI is explanation-only** — `bestRouteId` in the response is always `scoredRoutes[0].id` (the highest scorer after sorting). The AI's returned `bestRouteId` is ignored for route selection; only its `bullets` and `suggestedStops` are used. Never let AI override the numeric score ranking.
+- **Partial data penalty** — routes with `signals.partial = true` receive a 15% score reduction (floor 5) in `happiness.ts`. This prevents incomplete OSM data from winning unfairly over fully-scored routes.
 - **Overpass must degrade gracefully** — always return `{ ..., partial: true }` on timeout/error, never throw. Routes still display with partial scores.
 - **Server-side caching** — geocoding (24h TTL, 500 entries) and routes (2h TTL, 200 entries) are cached in-memory LRU to reduce API costs.
 
@@ -56,9 +58,10 @@ score = 5 (base)
       + min((waterways / distKm) × 10,  25)
       + min((water     / distKm) × 8,   20)
       + min((green     / distKm) × 5,   15)
+      × 0.85  if signals.partial = true        ← confidence penalty, floor 5
 ```
 
-To adjust weights, edit `app/lib/happiness.ts` only — nowhere else.
+To adjust weights or penalties, edit `app/lib/happiness.ts` only — nowhere else.
 
 ## Code conventions
 
@@ -66,7 +69,7 @@ To adjust weights, edit `app/lib/happiness.ts` only — nowhere else.
 - **No CSS files other than `globals.css`** — use Tailwind utility classes only.
 - **Server lib functions are pure** — `nominatim.ts`, `osrm.ts`, `overpass.ts`, `happiness.ts` have no side-effects and no Next.js imports. Keep them that way so they're easy to unit-test.
 - **Geometry coordinate order** — Directions API returns encoded polylines decoded to `[lat, lng]`, then swapped to `[lng, lat]` in `osrm.ts`. Google Maps uses `{ lat, lng }` objects. The swap to Google Maps format happens in `MapView.tsx`. Don't swap anywhere else.
-- Route IDs are their 0-based index in the sorted `scoredRoutes` array (sorted descending by score). `bestRouteId` is set by the AI or defaults to `scoredRoutes[0].id`.
+- Route IDs are their 0-based index in the sorted `scoredRoutes` array (sorted descending by score). `bestRouteId` is always `scoredRoutes[0].id` — the top scorer. AI never overrides this.
 
 ## Environment variables
 

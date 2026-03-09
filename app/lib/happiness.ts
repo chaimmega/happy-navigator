@@ -62,7 +62,10 @@ export function computeHappyScore(
 
   const raw   = base + parks + waterways + water + green + lit + calmWater + launch + portage
               - rapids - elevation - motorBoat;
-  const score = Math.round(Math.max(0, Math.min(raw, 100)));
+
+  // Partial OSM data reduces confidence in the score — apply 15% penalty, floor at 5
+  const adjusted = signals.partial ? Math.max(5, raw * 0.85) : raw;
+  const score = Math.round(Math.max(0, Math.min(adjusted, 100)));
 
   return {
     score,

@@ -78,7 +78,7 @@ function ComparisonStrip({
 }) {
   if (routes.length < 2) return null;
   return (
-    <div className="grid gap-1.5 mb-3" style={{ gridTemplateColumns: `repeat(${routes.length}, 1fr)` }}>
+    <div data-testid="route-comparison-strip" className="grid gap-1.5 mb-3" style={{ gridTemplateColumns: `repeat(${routes.length}, 1fr)` }}>
       {routes.map((r, i) => {
         const color = ROUTE_COLORS[i % ROUTE_COLORS.length];
         const isSelected = r.id === selectedRouteId;
@@ -87,6 +87,7 @@ function ComparisonStrip({
         return (
           <button
             key={r.id}
+            data-testid={`route-strip-btn-${r.id}`}
             type="button"
             onClick={() => onSelect(r.id)}
             className={`rounded-lg p-2 text-center transition-all border-2 ${
@@ -96,6 +97,7 @@ function ComparisonStrip({
           >
             <div className="text-xs font-semibold text-gray-700 truncate">{ROUTE_LABELS[i]}</div>
             <div
+              data-testid={`route-score-${r.id}`}
               className="text-lg font-bold leading-tight mt-0.5"
               style={{ color }}
             >
@@ -277,7 +279,7 @@ export default function RoutePanel({
 
         {explanation ? (
           <>
-            <ul className="space-y-1.5">
+            <ul data-testid="ai-summary" className="space-y-1.5">
               {explanation.bullets.map((bullet, i) => (
                 <li key={i} className="flex gap-2 text-sm text-emerald-800 leading-snug">
                   <span className="mt-0.5 flex-shrink-0 text-emerald-500">✦</span>
@@ -344,6 +346,7 @@ export default function RoutePanel({
           return (
             <div
               key={route.id}
+              data-testid={`route-card-${route.id}`}
               role="button"
               tabIndex={0}
               onClick={() => onSelectRoute(route.id)}
@@ -430,7 +433,9 @@ export default function RoutePanel({
                     <Badge show={route.signals.motorBoatCount > 0}  bg="bg-red-100 text-red-600"       label={`🚤 ${route.signals.motorBoatCount} motorboats`} />
                     <Badge show={route.signals.rapidCount > 0}      bg="bg-orange-100 text-orange-700" label={`🌀 ${route.signals.rapidCount} rapids`} />
                     {route.signals.partial && (
-                      <Badge show bg="bg-gray-100 text-gray-400" label="~ partial data" />
+                      <span data-testid="partial-badge">
+                        <Badge show bg="bg-gray-100 text-gray-400" label="~ partial data" />
+                      </span>
                     )}
                   </div>
 
@@ -445,6 +450,7 @@ export default function RoutePanel({
                   {/* GPX export */}
                   <button
                     type="button"
+                    data-testid="btn-export-gpx"
                     onClick={(e) => { e.stopPropagation(); exportGPX(route, startName, endName); }}
                     className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-emerald-600 transition-colors font-medium"
                   >

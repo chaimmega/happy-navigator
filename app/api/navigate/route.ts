@@ -313,11 +313,9 @@ export async function POST(req: NextRequest) {
   console.log("[navigate] calling AI for explanation…");
   const explanation = await callAI(scoredRoutes, startName, endName);
 
-  const validIds = scoredRoutes.map((r) => r.id);
-  const bestRouteId =
-    explanation && validIds.includes(explanation.bestRouteId)
-      ? explanation.bestRouteId
-      : scoredRoutes[0].id;
+  // happyScore is the source of truth for ranking — AI explains but never overrides it.
+  // scoredRoutes is already sorted descending by score, so index 0 is always the winner.
+  const bestRouteId = scoredRoutes[0].id;
 
   return NextResponse.json(
     {

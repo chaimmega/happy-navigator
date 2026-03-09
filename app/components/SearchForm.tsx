@@ -177,6 +177,7 @@ export default function SearchForm({
       <div className="flex gap-1 p-1 bg-gray-100 rounded-lg text-sm">
         <button
           type="button"
+          data-testid="tab-address"
           onClick={() => { setUrlMode(false); setShowManualFallback(false); }}
           className={`flex-1 py-1.5 rounded-md font-medium transition-all ${
             !urlMode ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
@@ -186,6 +187,7 @@ export default function SearchForm({
         </button>
         <button
           type="button"
+          data-testid="tab-url"
           onClick={() => { setUrlMode(true); setShowManualFallback(false); }}
           className={`flex-1 py-1.5 rounded-md font-medium transition-all ${
             urlMode ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
@@ -204,6 +206,7 @@ export default function SearchForm({
             </label>
             <input
               type="url"
+              data-testid="input-url"
               value={mapsUrl}
               onChange={(e) => setMapsUrl(e.target.value)}
               placeholder="https://www.google.com/maps/dir/..."
@@ -281,6 +284,7 @@ export default function SearchForm({
             <div className="flex items-center gap-1.5">
               <button
                 type="button"
+                data-testid="btn-swap"
                 onClick={handleSwap}
                 title="Swap start and end"
                 aria-label="Swap start and end locations"
@@ -337,6 +341,7 @@ export default function SearchForm({
 
       <button
         type="submit"
+        data-testid="btn-submit"
         disabled={!canSubmit}
         className="w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition-colors flex items-center justify-center gap-2 text-sm"
       >

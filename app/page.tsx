@@ -40,7 +40,7 @@ function LoadingSteps({ active }: { active: boolean }) {
   if (!active) return null;
 
   return (
-    <div className="flex-1 flex flex-col justify-center px-6 gap-4">
+    <div data-testid="loading-steps" className="flex-1 flex flex-col justify-center px-6 gap-4">
       <div className="space-y-2">
         {LOADING_STEPS.map((s, i) => {
           const done    = i < step;
@@ -48,6 +48,7 @@ function LoadingSteps({ active }: { active: boolean }) {
           return (
             <div
               key={i}
+              data-testid={`loading-step-${i}`}
               className={`flex items-center gap-3 text-sm transition-opacity duration-500 ${
                 i > step ? "opacity-20" : "opacity-100"
               }`}
@@ -343,11 +344,12 @@ export default function Home() {
             )}
 
             {error && (
-              <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700 flex gap-2 items-start">
+              <div data-testid="error-banner" className="mt-4 p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700 flex gap-2 items-start">
                 <span className="flex-shrink-0 mt-0.5">⚠️</span>
                 <span className="flex-1">{error}</span>
                 <button
                   type="button"
+                  data-testid="error-dismiss"
                   onClick={() => setError(null)}
                   aria-label="Dismiss error"
                   className="flex-shrink-0 text-red-400 hover:text-red-600 transition-colors leading-none text-base"
@@ -392,7 +394,7 @@ export default function Home() {
         </aside>
 
         {/* Map — flex-1 fills remaining height on desktop; min-h-[200px] on mobile */}
-        <div className={`flex-1 min-h-[200px] md:min-h-0 relative${mapPinTarget ? " map-pin-mode" : ""}`}>
+        <div data-testid="map-container" className={`flex-1 min-h-[200px] md:min-h-0 relative${mapPinTarget ? " map-pin-mode" : ""}`}>
           {result ? (
             <MapView
               routes={result.routes}

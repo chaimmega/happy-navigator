@@ -213,6 +213,7 @@ export default function PlaceAutocomplete({
         <input
           ref={inputRef}
           id={id}
+          data-testid={id ? `input-${id}` : undefined}
           type="text"
           value={value.text}
           onChange={handleChange}
@@ -267,6 +268,7 @@ export default function PlaceAutocomplete({
           {value.text && !loading && (
             <button
               type="button"
+              data-testid={id ? `btn-clear-${id}` : undefined}
               onClick={handleClear}
               aria-label="Clear"
               className="text-gray-300 hover:text-gray-500 transition-colors text-lg leading-none"
@@ -282,6 +284,7 @@ export default function PlaceAutocomplete({
         <ul
           ref={listRef}
           id={id ? `${id}-listbox` : undefined}
+          data-testid={id ? `autocomplete-dropdown-${id}` : "autocomplete-dropdown"}
           role="listbox"
           className="absolute z-[9999] left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl overflow-hidden max-h-64 overflow-y-auto"
         >
@@ -289,6 +292,7 @@ export default function PlaceAutocomplete({
             <li
               key={result.placeId}
               id={id ? `${id}-option-${i}` : undefined}
+              data-testid={`autocomplete-option-${i}`}
               role="option"
               aria-selected={i === activeIdx}
               onMouseDown={(e) => {
