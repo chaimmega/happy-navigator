@@ -26,3 +26,21 @@ scripts/shot-*.png
 
 # TypeScript
 *.tsbuildinfo
+
+# Playwright
+playwright-report/
+test-results/
+
+# Soak loop artifacts
+soak-*.log
+soak-summary.md
+
+# Screenshots (manual / test captures)
+*.png
+
+# Claude Code
+.claude/
+.playwright-mcp/
+
+# Project docs / briefs (local only)
+PROJECT_BRIEF.md
