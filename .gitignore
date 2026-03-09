@@ -34,6 +34,7 @@ test-results/
 # Soak loop artifacts
 soak-*.log
 soak-summary.md
+FIXES_APPLIED.md
 
 # Screenshots (manual / test captures)
 *.png
