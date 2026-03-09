@@ -1,109 +1,65 @@
-# soak-loop.ps1 — overnight regression hunter
-#
-# Runs the full e2e suite repeatedly for 8 hours.
-# On failure: attempts autofix via soak-autofix.js, re-runs the failed file.
-# Stops after 3 consecutive unfixed failures.
-# Writes a summary to soak-summary.md at the end.
-
-$stop               = (Get-Date).AddHours(8)
-$log                = "soak-$(Get-Date -Format 'yyyyMMdd-HHmmss').log"
+$stop                = (Get-Date).AddHours(8)
+$log                 = "soak-$(Get-Date -Format 'yyyyMMdd-HHmmss').log"
 $consecutiveFailures = 0
 $totalRuns           = 0
 $totalPasses         = 0
 $totalFailures       = 0
 $totalFixes          = 0
 
-function Log($msg) {
+function LogMsg($msg) {
   $ts = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
-  "$ts  $msg" | Tee-Object -FilePath $log -Append
+  ($ts + '  ' + $msg) | Tee-Object -FilePath $log -Append
 }
 
-Log "=== Soak loop started — runs until $stop ==="
-Log "    Full suite: npm run test:e2e"
-Log "    Autofix:    node scripts/soak-autofix.js playwright-report/results.json"
-Log ""
+LogMsg ('Soak started until ' + $stop.ToString('yyyy-MM-dd HH:mm:ss'))
 
 while ((Get-Date) -lt $stop) {
   $totalRuns++
-  Log "--- Run #$totalRuns ---"
+  LogMsg ('--- Run #' + $totalRuns + ' ---')
 
-  # 1. Run full suite
   npm run test:e2e 2>&1 | Tee-Object -FilePath $log -Append
   $exitCode = $LASTEXITCODE
 
   if ($exitCode -eq 0) {
     $totalPasses++
     $consecutiveFailures = 0
-    Log "PASS  (total passes: $totalPasses)"
+    LogMsg ('PASS  (passes: ' + $totalPasses + ')')
     continue
   }
 
-  # 2. Suite failed — try autofix
   $totalFailures++
-  Log "FAIL  exit=$exitCode  (total failures: $totalFailures, consecutive: $($consecutiveFailures + 1))"
+  $consecutiveFailures++
+  LogMsg ('FAIL  exit=' + $exitCode + '  failures: ' + $totalFailures + '  consecutive: ' + $consecutiveFailures)
 
-  if (Test-Path "playwright-report/results.json") {
-    Log "      Running autofix..."
-    node scripts/soak-autofix.js playwright-report/results.json 2>&1 |
-      Tee-Object -FilePath $log -Append
-    $autofixExit = $LASTEXITCODE
-
-    if ($autofixExit -eq 0) {
-      # Fixes were applied — re-run the soak suite specifically
+  if (Test-Path 'playwright-report/results.json') {
+    node scripts/soak-autofix.js playwright-report/results.json 2>&1 | Tee-Object -FilePath $log -Append
+    if ($LASTEXITCODE -eq 0) {
       $totalFixes++
       $consecutiveFailures = 0
-      Log "      Autofix applied (total fixes: $totalFixes). Re-running soak suite..."
+      LogMsg ('Autofix applied (' + $totalFixes + ' total). Re-running soak...')
       npm run test:e2e:soak 2>&1 | Tee-Object -FilePath $log -Append
-      $rerunExit = $LASTEXITCODE
-      if ($rerunExit -eq 0) {
-        Log "      Re-run PASSED after autofix."
+      if ($LASTEXITCODE -eq 0) {
         $totalPasses++
+        LogMsg 'Re-run PASSED after fix.'
       } else {
-        Log "      Re-run FAILED after autofix — counting as unfixed failure."
         $consecutiveFailures++
+        LogMsg 'Re-run FAILED after fix.'
       }
     } else {
-      # Nothing fixable
-      $consecutiveFailures++
-      Log "      Autofix found nothing to fix. Consecutive unfixed failures: $consecutiveFailures"
+      LogMsg ('Nothing fixable. Consecutive: ' + $consecutiveFailures)
     }
   } else {
-    $consecutiveFailures++
-    Log "      No results.json found — cannot autofix. Consecutive: $consecutiveFailures"
+    LogMsg ('No results.json found. Consecutive: ' + $consecutiveFailures)
   }
 
-  # 3. Stop after 3 consecutive unfixed failures
   if ($consecutiveFailures -ge 3) {
-    Log "STOP  3 consecutive unfixed failures — halting loop."
+    LogMsg 'STOP — 3 consecutive unfixed failures.'
     break
   }
 }
 
-# Write soak-summary.md
-$endTime  = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
-$stopReason = if ($consecutiveFailures -ge 3) { "3 consecutive unfixed failures" } else { "8-hour time limit reached" }
-
-$summaryLines = @(
-  "# Soak Loop Summary",
-  "",
-  "**Ended:** $endTime",
-  "**Log file:** $log",
-  "",
-  "## Stats",
-  "",
-  "- Total runs:              $totalRuns",
-  "- Passes:                  $totalPasses",
-  "- Failures:                $totalFailures",
-  "- Fixes applied:           $totalFixes",
-  "- Consecutive failures:    $consecutiveFailures",
-  "",
-  "## Stop reason",
-  "",
-  $stopReason
-)
-
-$summary = $summaryLines -join "`n"
-$summary | Set-Content "soak-summary.md" -Encoding UTF8
-$summary | Tee-Object -FilePath $log -Append
-
-Log "=== Soak loop finished ==="
+$reason = if ($consecutiveFailures -ge 3) { '3 consecutive unfixed failures' } else { '8-hour limit reached' }
+$end = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
+$summary = 'Ended: ' + $end + ' | Runs: ' + $totalRuns + ' | Passes: ' + $totalPasses + ' | Failures: ' + $totalFailures + ' | Fixes: ' + $totalFixes + ' | Reason: ' + $reason
+$summary | Set-Content soak-summary.md -Encoding UTF8
+LogMsg ('Done. ' + $summary)
