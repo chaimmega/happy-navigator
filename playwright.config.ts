@@ -38,6 +38,12 @@ export default defineConfig({
       testMatch: ["**/soak/**/*.spec.ts"],
       retries: 0, // each iteration stands alone; failures are expected to be rare
     },
+    {
+      name: "integration",
+      use: { ...devices["Desktop Chrome"] },
+      testMatch: ["**/integration/**/*.spec.ts"],
+      retries: 1, // real APIs can be flaky
+    },
   ],
 
   webServer: {

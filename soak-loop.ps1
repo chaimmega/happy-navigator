@@ -17,7 +17,7 @@ while ((Get-Date) -lt $stop) {
   $totalRuns++
   LogMsg ('--- Run #' + $totalRuns + ' ---')
 
-  npm run test:e2e 2>&1 | Tee-Object -FilePath $log -Append
+  npm run test:integration 2>&1 | Tee-Object -FilePath $log -Append
   $exitCode = $LASTEXITCODE
 
   if ($exitCode -eq 0) {
@@ -36,8 +36,8 @@ while ((Get-Date) -lt $stop) {
     if ($LASTEXITCODE -eq 0) {
       $totalFixes++
       $consecutiveFailures = 0
-      LogMsg ('Autofix applied (' + $totalFixes + ' total). Re-running soak...')
-      npm run test:e2e:soak 2>&1 | Tee-Object -FilePath $log -Append
+      LogMsg ('Autofix applied (' + $totalFixes + ' total). Re-running integration tests...')
+      npm run test:integration 2>&1 | Tee-Object -FilePath $log -Append
       if ($LASTEXITCODE -eq 0) {
         $totalPasses++
         LogMsg 'Re-run PASSED after fix.'
@@ -52,13 +52,13 @@ while ((Get-Date) -lt $stop) {
     LogMsg ('No results.json found. Consecutive: ' + $consecutiveFailures)
   }
 
-  if ($consecutiveFailures -ge 3) {
-    LogMsg 'STOP — 3 consecutive unfixed failures.'
+  if ($consecutiveFailures -ge 5) {
+    LogMsg 'STOP — 5 consecutive unfixed failures.'
     break
   }
 }
 
-$reason = if ($consecutiveFailures -ge 3) { '3 consecutive unfixed failures' } else { '8-hour limit reached' }
+$reason = if ($consecutiveFailures -ge 5) { '5 consecutive unfixed failures' } else { '8-hour limit reached' }
 $end = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
 $summary = 'Ended: ' + $end + ' | Runs: ' + $totalRuns + ' | Passes: ' + $totalPasses + ' | Failures: ' + $totalFailures + ' | Fixes: ' + $totalFixes + ' | Reason: ' + $reason
 $summary | Set-Content soak-summary.md -Encoding UTF8
