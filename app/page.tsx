@@ -40,7 +40,7 @@ function LoadingSteps({ active }: { active: boolean }) {
   if (!active) return null;
 
   return (
-    <div data-testid="loading-steps" className="flex-1 flex flex-col justify-center px-6 gap-4">
+    <div data-testid="loading-steps" aria-live="polite" aria-label="Search progress" className="flex-1 flex flex-col justify-center px-6 gap-4">
       <div className="space-y-2">
         {LOADING_STEPS.map((s, i) => {
           const done    = i < step;
@@ -105,6 +105,7 @@ function MetricToggle({ useMetric, onToggle }: { useMetric: boolean; onToggle: (
       type="button"
       onClick={onToggle}
       title={`Switch to ${useMetric ? "imperial" : "metric"} units`}
+      aria-label={`Switch to ${useMetric ? "imperial" : "metric"} units`}
       className="hidden sm:flex items-center gap-1.5 text-xs font-medium text-emerald-200 hover:text-white border border-emerald-600 rounded-lg px-2.5 py-1 bg-emerald-700/50 hover:bg-emerald-600/50 transition-colors"
     >
       <span className={useMetric ? "text-white font-bold" : ""}>km</span>
@@ -124,6 +125,7 @@ function PinModeBanner({ target, onCancel }: { target: "start" | "end"; onCancel
       <button
         type="button"
         onClick={onCancel}
+        aria-label="Cancel map pin mode"
         className="text-emerald-500 hover:text-emerald-700 font-bold leading-none"
       >
         ×
@@ -270,7 +272,7 @@ export default function Home() {
 
   return (
     <GoogleMapsProvider>
-    <main className="h-screen overflow-hidden bg-gray-50 flex flex-col">
+    <main aria-label="Happy Navigator main content" className="h-screen overflow-hidden bg-gray-50 flex flex-col">
       {/* ── Header ── */}
       <header className="bg-gradient-to-r from-emerald-800 to-emerald-700 px-4 sm:px-6 py-3 flex items-center gap-3 flex-shrink-0 shadow-sm">
         <div className="w-9 h-9 rounded-xl bg-white/15 flex items-center justify-center flex-shrink-0">
@@ -293,6 +295,7 @@ export default function Home() {
                 type="button"
                 onClick={() => setMapPinTarget("start")}
                 title="Click map to set start location"
+                aria-label="Set start location by clicking on the map"
                 className="text-[10px] text-emerald-200 hover:text-white border border-emerald-600 rounded px-1.5 py-1 transition-colors bg-emerald-700/50"
               >
                 📍 Pin start
@@ -301,6 +304,7 @@ export default function Home() {
                 type="button"
                 onClick={() => setMapPinTarget("end")}
                 title="Click map to set end location"
+                aria-label="Set end location by clicking on the map"
                 className="text-[10px] text-emerald-200 hover:text-white border border-emerald-600 rounded px-1.5 py-1 transition-colors bg-emerald-700/50"
               >
                 📍 Pin end
@@ -344,7 +348,7 @@ export default function Home() {
             )}
 
             {error && (
-              <div data-testid="error-banner" className="mt-4 p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700 flex gap-2 items-start">
+              <div data-testid="error-banner" role="alert" aria-live="assertive" className="mt-4 p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700 flex gap-2 items-start">
                 <span className="flex-shrink-0 mt-0.5">⚠️</span>
                 <span className="flex-1">{error}</span>
                 <button

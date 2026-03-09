@@ -1,28 +1,12 @@
 import { Coordinates } from "../types";
+import { createLRUCache } from "./lruCache";
 
 // Prefer a server-only key; fall back to the public key if not set
 const API_KEY = process.env.GOOGLE_MAPS_SERVER_KEY ?? process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? "";
 const DIRECTIONS_BASE = "https://maps.googleapis.com/maps/api/directions/json";
 
-// ─── Simple LRU cache for route results ──────────────────────────────────────
-const MAX_CACHE = 200;
-const CACHE_TTL = 2 * 60 * 60 * 1000; // 2 hours
-const routeCache = new Map<string, { result: OSRMRoute[]; expires: number }>();
-
-function getRouteCached(key: string): OSRMRoute[] | undefined {
-  const entry = routeCache.get(key);
-  if (!entry) return undefined;
-  if (Date.now() > entry.expires) { routeCache.delete(key); return undefined; }
-  return entry.result;
-}
-
-function setRouteCache(key: string, result: OSRMRoute[]) {
-  if (routeCache.size >= MAX_CACHE) {
-    const oldest = routeCache.keys().next().value;
-    if (oldest !== undefined) routeCache.delete(oldest);
-  }
-  routeCache.set(key, { result, expires: Date.now() + CACHE_TTL });
-}
+// ─── LRU cache for route results ─────────────────────────────────────────────
+const routeCache = createLRUCache<OSRMRoute[]>(200, 2 * 60 * 60 * 1000);
 
 export interface OSRMRoute {
   geometry: {
@@ -84,7 +68,7 @@ export async function getCanoeRoutes(
   via?: Coordinates
 ): Promise<OSRMRoute[]> {
   const cacheKey = `${start.lat.toFixed(5)},${start.lng.toFixed(5)}|${end.lat.toFixed(5)},${end.lng.toFixed(5)}${via ? `|${via.lat.toFixed(5)},${via.lng.toFixed(5)}` : ""}`;
-  const cached = getRouteCached(cacheKey);
+  const cached = routeCache.get(cacheKey);
   if (cached) return cached;
 
   const params = new URLSearchParams({
@@ -141,6 +125,6 @@ export async function getCanoeRoutes(
     };
   });
 
-  setRouteCache(cacheKey, routes);
+  routeCache.set(cacheKey, routes);
   return routes;
 }

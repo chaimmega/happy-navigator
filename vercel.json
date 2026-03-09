@@ -1,0 +1,14 @@
+{
+  "framework": "nextjs",
+  "buildCommand": "npm run build",
+  "devCommand": "npm run dev",
+  "installCommand": "npm ci",
+  "functions": {
+    "app/api/navigate/route.ts": {
+      "maxDuration": 30
+    },
+    "app/api/reverse/route.ts": {
+      "maxDuration": 10
+    }
+  }
+}

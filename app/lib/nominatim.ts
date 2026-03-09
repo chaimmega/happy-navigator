@@ -1,32 +1,17 @@
+import { createLRUCache } from "./lruCache";
+
 // Prefer a server-only key; fall back to the public key if not set
 const API_KEY = process.env.GOOGLE_MAPS_SERVER_KEY ?? process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? "";
 const GEOCODE_BASE = "https://maps.googleapis.com/maps/api/geocode/json";
-
-// ─── Simple LRU cache for geocoding results ─────────────────────────────────
-const MAX_CACHE = 500;
-const CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
-const geoCache = new Map<string, { result: GeocodedLocation | null; expires: number }>();
-
-function getCached(key: string): GeocodedLocation | null | undefined {
-  const entry = geoCache.get(key);
-  if (!entry) return undefined;
-  if (Date.now() > entry.expires) { geoCache.delete(key); return undefined; }
-  return entry.result;
-}
-
-function setCache(key: string, result: GeocodedLocation | null) {
-  if (geoCache.size >= MAX_CACHE) {
-    const oldest = geoCache.keys().next().value;
-    if (oldest !== undefined) geoCache.delete(oldest);
-  }
-  geoCache.set(key, { result, expires: Date.now() + CACHE_TTL });
-}
 
 export interface GeocodedLocation {
   lat: number;
   lng: number;
   displayName: string;
 }
+
+// ─── LRU cache for geocoding results ────────────────────────────────────────
+const cache = createLRUCache<GeocodedLocation | null>(500, 24 * 60 * 60 * 1000);
 
 /** Match strings like "-34.9285,138.6007" or "40.7128, -74.0060" */
 const COORD_RE = /^(-?\d{1,3}\.\d+)\s*,\s*(-?\d{1,3}\.\d+)$/;
@@ -51,7 +36,7 @@ export async function geocode(
 
 async function forwardGeocode(address: string): Promise<GeocodedLocation | null> {
   const cacheKey = `fwd:${address.toLowerCase().trim()}`;
-  const cached = getCached(cacheKey);
+  const cached = cache.get(cacheKey);
   if (cached !== undefined) return cached;
 
   const url = `${GEOCODE_BASE}?address=${encodeURIComponent(address)}&key=${API_KEY}`;
@@ -74,7 +59,7 @@ async function forwardGeocode(address: string): Promise<GeocodedLocation | null>
     } = await resp.json();
 
     if (data.status !== "OK" || !data.results.length) {
-      setCache(cacheKey, null);
+      cache.set(cacheKey,null);
       return null;
     }
 
@@ -84,7 +69,7 @@ async function forwardGeocode(address: string): Promise<GeocodedLocation | null>
       lng: r.geometry.location.lng,
       displayName: r.formatted_address,
     };
-    setCache(cacheKey, result);
+    cache.set(cacheKey,result);
     return result;
   } catch (err) {
     console.error("[geocode] fetch error:", err);
@@ -94,7 +79,7 @@ async function forwardGeocode(address: string): Promise<GeocodedLocation | null>
 
 async function reverseGeocode(lat: number, lng: number): Promise<GeocodedLocation | null> {
   const cacheKey = `rev:${lat.toFixed(5)},${lng.toFixed(5)}`;
-  const cached = getCached(cacheKey);
+  const cached = cache.get(cacheKey);
   if (cached !== undefined) return cached;
 
   const url = `${GEOCODE_BASE}?latlng=${lat},${lng}&key=${API_KEY}`;
@@ -117,7 +102,7 @@ async function reverseGeocode(lat: number, lng: number): Promise<GeocodedLocatio
     } = await resp.json();
 
     if (data.status !== "OK" || !data.results.length) {
-      setCache(cacheKey, null);
+      cache.set(cacheKey,null);
       return null;
     }
 
@@ -127,7 +112,7 @@ async function reverseGeocode(lat: number, lng: number): Promise<GeocodedLocatio
       lng: r.geometry.location.lng,
       displayName: r.formatted_address,
     };
-    setCache(cacheKey, result);
+    cache.set(cacheKey,result);
     return result;
   } catch (err) {
     console.error("[geocode] reverse fetch error:", err);

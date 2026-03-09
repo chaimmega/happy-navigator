@@ -78,7 +78,7 @@ function ComparisonStrip({
 }) {
   if (routes.length < 2) return null;
   return (
-    <div data-testid="route-comparison-strip" className="grid gap-1.5 mb-3" style={{ gridTemplateColumns: `repeat(${routes.length}, 1fr)` }}>
+    <div data-testid="route-comparison-strip" aria-label="Route comparison" className="grid gap-1.5 mb-3" style={{ gridTemplateColumns: `repeat(${routes.length}, 1fr)` }}>
       {routes.map((r, i) => {
         const color = ROUTE_COLORS[i % ROUTE_COLORS.length];
         const isSelected = r.id === selectedRouteId;
@@ -177,7 +177,7 @@ function ScoreBar({ breakdown, total }: { breakdown: ScoreBreakdown; total: numb
   if (total === 0) return null;
   return (
     <div className="mt-2.5">
-      <div className="flex rounded-full overflow-hidden h-1.5 bg-gray-100">
+      <div role="img" aria-label={`Score breakdown: ${total} points`} className="flex rounded-full overflow-hidden h-1.5 bg-gray-100">
         {BREAKDOWN_SEGMENTS.map(({ key, color }) => {
           const val = breakdown[key];
           if (val === 0) return null;
@@ -279,7 +279,7 @@ export default function RoutePanel({
 
         {explanation ? (
           <>
-            <ul data-testid="ai-summary" className="space-y-1.5">
+            <ul data-testid="ai-summary" aria-label="AI route recommendations" className="space-y-1.5">
               {explanation.bullets.map((bullet, i) => (
                 <li key={i} className="flex gap-2 text-sm text-emerald-800 leading-snug">
                   <span className="mt-0.5 flex-shrink-0 text-emerald-500">✦</span>
@@ -293,7 +293,7 @@ export default function RoutePanel({
                 <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider mb-1.5">
                   Suggested stops
                 </p>
-                <ul className="space-y-1">
+                <ul aria-label="Suggested stops" className="space-y-1">
                   {explanation.suggestedStops.map((stop, i) => (
                     <li key={i} className="text-sm text-emerald-700 flex gap-1.5">
                       <span>📍</span>
@@ -452,6 +452,7 @@ export default function RoutePanel({
                     type="button"
                     data-testid="btn-export-gpx"
                     onClick={(e) => { e.stopPropagation(); exportGPX(route, startName, endName); }}
+                    aria-label={`Export ${startName} to ${endName} route as GPX file`}
                     className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-emerald-600 transition-colors font-medium"
                   >
                     <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

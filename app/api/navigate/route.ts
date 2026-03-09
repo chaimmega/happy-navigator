@@ -74,25 +74,26 @@ async function callAI(
     partialData: r.signals.partial,
   }));
 
-  const prompt = `You are a friendly canoe route advisor helping someone find their happiest canoe route.
+  const prompt = `You are a friendly canoe route advisor. Analyse these candidate routes and identify the best one for a happy paddling experience.
 
 Route: ${startName} → ${endName}
 
-Candidate routes scored from OpenStreetMap data:
+Scored routes (all data per km, higher = better except penalties):
 ${JSON.stringify(summary, null, 2)}
 
-The Happy Score (0–100) reflects: parks, water features, dedicated waterways, green spaces, street lighting, calm water sections, and boat launch access per km — minus penalties for motorboat traffic zones, rapids, and steep portage terrain.
+Score factors: parks (+30 max), waterways (+25), water features (+20), green spaces (+15), calm water (+15), lighting (+10), launches (+8), portage points (+5). Penalties: motorboat zones (−12), rapids (−15), steep portage (−20). Partial data = 15% score reduction.
 
-Task:
-1. Confirm or select the best "Happy Route" (highest score is a good default, but use judgement based on all factors).
-2. Write 2–4 short, friendly, specific bullet points explaining WHY it's the happy route (mention specific features like waterways, calm stretches, parks along the bank, portage points, or motorboat traffic if notable).
-3. If data suggests interesting stops (parks along the bank, scenic viewpoints, picnic areas, put-in/take-out points), add 1–3 "suggestedStops".
+Instructions:
+1. The bestRouteId MUST be the route with the highest happyScore — do not override this.
+2. Write 2–3 short, specific bullets explaining WHY it scores highest (cite actual features: waterway count, park count, calm sections, absence of rapids, etc.).
+3. Only add suggestedStops if the data strongly implies notable features (parks, launches, calm bays). Leave as [] if uncertain.
+4. Be specific and factual — mention numbers from the data, not generic advice.
 
-Respond with ONLY valid JSON — no markdown fences, no extra text:
+Respond with ONLY valid JSON:
 {
   "bestRouteId": <number>,
-  "bullets": ["<bullet 1>", "<bullet 2>", "..."],
-  "suggestedStops": ["<stop 1>", "..."]
+  "bullets": ["<bullet 1>", "<bullet 2>"],
+  "suggestedStops": []
 }`;
 
   try {
