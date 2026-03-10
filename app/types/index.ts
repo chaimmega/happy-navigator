@@ -108,7 +108,3 @@ export function formatElevation(meters: number, metric: boolean): string {
   if (metric) return `↑ ${Math.round(meters)} m`;
   return `↑ ${Math.round(meters * 3.28084)} ft`;
 }
-
-export function estimateCO2Saved(distanceMeters: number): number {
-  return Math.round((distanceMeters / 1000) * 120);
-}

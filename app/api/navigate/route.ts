@@ -12,7 +12,7 @@ import { computeHappyScore } from "../../lib/happiness";
 import { parseGoogleMapsUrl } from "../../lib/parseGoogleMapsUrl";
 import type { NavigateRequest, ScoredRoute, AIExplanation } from "../../types";
 
-// ─── Simple in-memory rate limiter (5 requests/min per IP) ───────────────────
+// ─── Simple in-memory rate limiter (10 requests/min per IP) ──────────────────
 
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
 
@@ -78,7 +78,7 @@ async function callAI(
 
 Route: ${startName} → ${endName}
 
-Scored routes (all data per km, higher = better except penalties):
+Scored routes (raw feature counts along each route, higher = better except penalties):
 ${JSON.stringify(summary, null, 2)}
 
 Score factors: parks (+30 max), scenic roads (+25), waterfront (+20), green spaces (+15), low traffic (+15), lighting (+10), rest stops (+8), viewpoints (+5). Penalties: construction zones (−15), steep terrain (−20), highway/motorway segments (−12). Partial data = 15% score reduction.

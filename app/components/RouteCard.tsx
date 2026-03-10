@@ -1,9 +1,9 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Download, Leaf, Flame } from "lucide-react";
+import { Download } from "lucide-react";
 import type { ScoredRoute, ScoreBreakdown } from "../types";
-import { formatDistance, formatDuration, formatElevation, estimateCO2Saved } from "../types";
+import { formatDistance, formatDuration, formatElevation } from "../types";
 import { ROUTE_COLORS, ROUTE_NAMES } from "../lib/constants";
 import HappyScore from "./HappyScore";
 
@@ -25,6 +25,7 @@ const signalChips = [
   { key: "greenCount", emoji: "🌿", label: "green" },
   { key: "restStopCount", emoji: "☕", label: "rest stops" },
   { key: "viewpointCount", emoji: "🏔️", label: "viewpoints" },
+  { key: "litCount", emoji: "💡", label: "well-lit" },
 ] as const;
 
 function escapeXml(s: string): string {
@@ -88,10 +89,6 @@ export function RouteCard({ route, isBest, isSelected, metric, onClick, startNam
   const totalPositive = positiveBreakdown.reduce(
     (sum, s) => sum + (route.scoreBreakdown[s.key] || 0), 0
   );
-
-  const calories = Math.round(50 * (route.duration / 3600));
-  const co2Grams = estimateCO2Saved(route.distance);
-  const co2Display = co2Grams >= 1000 ? `${(co2Grams / 1000).toFixed(1)} kg` : `${co2Grams} g`;
 
   return (
     <motion.div
@@ -191,13 +188,13 @@ export function RouteCard({ route, isBest, isSelected, metric, onClick, startNam
               {(route.scoreBreakdown.construction !== 0 || route.scoreBreakdown.elevation !== 0 || route.scoreBreakdown.highway !== 0) && (
                 <div className="flex flex-wrap gap-2.5 text-[11px]">
                   {route.scoreBreakdown.construction !== 0 && (
-                    <span className="text-orange-500">🚧 Construction {route.scoreBreakdown.construction}</span>
+                    <span className="text-orange-500">🚧 Construction −{route.scoreBreakdown.construction}</span>
                   )}
                   {route.scoreBreakdown.elevation !== 0 && (
-                    <span className="text-amber">⛰️ Hilly {route.scoreBreakdown.elevation}</span>
+                    <span className="text-amber">⛰️ Hilly −{route.scoreBreakdown.elevation}</span>
                   )}
                   {route.scoreBreakdown.highway !== 0 && (
-                    <span className="text-destructive">🛣️ Highway {route.scoreBreakdown.highway}</span>
+                    <span className="text-destructive">🛣️ Highway −{route.scoreBreakdown.highway}</span>
                   )}
                 </div>
               )}
@@ -212,18 +209,6 @@ export function RouteCard({ route, isBest, isSelected, metric, onClick, startNam
                     </span>
                   );
                 })}
-              </div>
-
-              {/* Calories & CO2 */}
-              <div className="flex items-center gap-4 text-[11px] text-muted-foreground">
-                <span className="flex items-center gap-1" title="Estimated calories burned">
-                  <Flame className="h-3 w-3 text-orange-400" />
-                  ~{calories} kcal
-                </span>
-                <span className="flex items-center gap-1 text-primary" title="CO₂ saved vs average route">
-                  <Leaf className="h-3 w-3" />
-                  saves ~{co2Display} CO₂
-                </span>
               </div>
 
               {/* Export GPX */}

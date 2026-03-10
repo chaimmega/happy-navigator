@@ -59,7 +59,7 @@ export function Header({ metric, onToggleMetric, result, mapPinTarget, pinLoadin
           {onToggleMetric && (
             <button
               onClick={onToggleMetric}
-              className="hidden md:flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-white/80 hover:text-white bg-white/10 hover:bg-white/15 backdrop-blur-sm transition-all"
+              className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-white/80 hover:text-white bg-white/10 hover:bg-white/15 backdrop-blur-sm transition-all"
             >
               <span className={metric ? "text-white font-bold" : ""}>km</span>
               <span className="text-white/50">/</span>

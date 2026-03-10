@@ -274,26 +274,6 @@ export default function Home() {
         </div>
       )}
 
-      {/* Metric toggle */}
-      <div className="flex items-center gap-1.5 bg-muted rounded-lg p-1">
-        <button
-          onClick={() => setMetric(true)}
-          className={`flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-all ${
-            metric ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          km
-        </button>
-        <button
-          onClick={() => setMetric(false)}
-          className={`flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-all ${
-            !metric ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          mi
-        </button>
-      </div>
-
       <AnimatePresence>
         {loading && <LoadingSteps currentStep={loadingStep} />}
       </AnimatePresence>
