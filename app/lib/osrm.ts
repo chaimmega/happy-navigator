@@ -6,9 +6,9 @@ const API_KEY = process.env.GOOGLE_MAPS_SERVER_KEY ?? process.env.NEXT_PUBLIC_GO
 const DIRECTIONS_BASE = "https://maps.googleapis.com/maps/api/directions/json";
 
 // ─── LRU cache for route results ─────────────────────────────────────────────
-const routeCache = createLRUCache<OSRMRoute[]>(200, 2 * 60 * 60 * 1000);
+const routeCache = createLRUCache<DirectionsRoute[]>(200, 2 * 60 * 60 * 1000);
 
-export interface OSRMRoute {
+export interface DirectionsRoute {
   geometry: {
     coordinates: [number, number][]; // [lng, lat] GeoJSON order
     type: string;
@@ -65,7 +65,7 @@ export async function getDrivingRoutes(
   start: Coordinates,
   end: Coordinates,
   via?: Coordinates
-): Promise<OSRMRoute[]> {
+): Promise<DirectionsRoute[]> {
   const cacheKey = `${start.lat.toFixed(5)},${start.lng.toFixed(5)}|${end.lat.toFixed(5)},${end.lng.toFixed(5)}${via ? `|${via.lat.toFixed(5)},${via.lng.toFixed(5)}` : ""}`;
   const cached = routeCache.get(cacheKey);
   if (cached) return cached;

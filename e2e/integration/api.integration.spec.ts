@@ -185,27 +185,27 @@ test.describe("Scoring invariants", () => {
 });
 
 // ============================================================================
-// 3. Waterway detection
+// 3. Scenic feature detection
 // ============================================================================
 
-test.describe("Waterway detection", () => {
+test.describe("Scenic feature detection", () => {
   test.setTimeout(45_000);
 
-  test("at least one route has waterway or water signals", async ({ request }) => {
+  test("at least one route has waterfront or scenic road signals", async ({ request }) => {
     const { body } = await postNavigate(request, {
       startCoords: CHARLES_START,
       endCoords: CHARLES_END,
     });
     const routes = body.routes as Array<{
-      signals: { waterwayCount: number; waterCount: number };
+      signals: { waterfrontCount: number; scenicRoadCount: number };
     }>;
-    const hasWaterSignal = routes.some(
-      (r) => r.signals.waterwayCount > 0 || r.signals.waterCount > 0
+    const hasScenicSignal = routes.some(
+      (r) => r.signals.waterfrontCount > 0 || r.signals.scenicRoadCount > 0
     );
-    expect(hasWaterSignal).toBe(true);
+    expect(hasScenicSignal).toBe(true);
   });
 
-  test("happyScore reflects water features", async ({ request }) => {
+  test("happyScore reflects scenic features", async ({ request }) => {
     const { body } = await postNavigate(request, {
       startCoords: CHARLES_START,
       endCoords: CHARLES_END,
@@ -269,20 +269,20 @@ test.describe("Error handling", () => {
 test.describe("Score comparison — scenic vs urban", () => {
   test.setTimeout(45_000);
 
-  test("waterfront route has at least some water signals", async ({ request }) => {
+  test("waterfront route has at least some waterfront signals", async ({ request }) => {
     const { body } = await postNavigate(request, {
       startCoords: RIVERSIDE_START,
       endCoords: RIVERSIDE_END,
     });
     const routes = body.routes as Array<{
-      signals: { waterCount: number; waterwayCount: number };
+      signals: { waterfrontCount: number; parkCount: number };
     }>;
     const topRoute = routes[0];
-    const hasWater = topRoute.signals.waterCount > 0 || topRoute.signals.waterwayCount > 0;
-    expect(hasWater).toBe(true);
+    const hasFeatures = topRoute.signals.waterfrontCount > 0 || topRoute.signals.parkCount > 0;
+    expect(hasFeatures).toBe(true);
   });
 
-  test("score breakdown parks+waterways+water sum is meaningful for scenic route", async ({
+  test("score breakdown parks+scenicRoads+waterfront sum is meaningful for scenic route", async ({
     request,
   }) => {
     const { body } = await postNavigate(request, {
@@ -290,9 +290,9 @@ test.describe("Score comparison — scenic vs urban", () => {
       endCoords: RIVERSIDE_END,
     });
     const routes = body.routes as Array<{
-      scoreBreakdown: { parks: number; waterways: number; water: number };
+      scoreBreakdown: { parks: number; scenicRoads: number; waterfront: number };
     }>;
     const top = routes[0].scoreBreakdown;
-    expect(top.parks + top.waterways + top.water).toBeGreaterThan(0);
+    expect(top.parks + top.scenicRoads + top.waterfront).toBeGreaterThan(0);
   });
 });

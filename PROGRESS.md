@@ -1,24 +1,21 @@
 # Happy Navigator — Complete Project Status
 
-**Last updated:** 2026-03-05
+**Last updated:** 2026-03-10
 **GitHub:** https://github.com/chaimmega/happy-navigator
 **GitHub account:** chaimmega
-**Local path:** `C:\Users\clevine\GitRepos\HappyNavigator`
-**Status:** MVP complete, pushed to GitHub, dev server verified working
+**Status:** MVP complete, driving route mode
 
 ---
 
 ## How to Resume a Session
 
 ```bash
-cd C:\Users\clevine\GitRepos\HappyNavigator
+cd happy-navigator
 claude --dangerouslySkipPermissions
 ```
 
 Claude loads memory from `.claude/projects/.../memory/MEMORY.md` automatically.
 Tell Claude: **"Check PROGRESS.md and continue"**
-
-User has granted full autonomy — no need to ask for confirmation on any repo actions.
 
 ---
 
@@ -29,10 +26,9 @@ npm run dev          # http://localhost:3000
 npm run build        # production build + type-check (0 errors)
 npx tsc --noEmit     # type-check only
 npm run lint         # ESLint
-node scripts/screenshot.mjs  # take screenshots (server must be running)
 ```
 
-`.env.local` already exists locally with a real `ANTHROPIC_API_KEY`. Do not commit it.
+`.env.local` already exists locally with real API keys. Do not commit it.
 
 **Node.js v18 or later required.** (Check: `node --version`)
 
@@ -44,13 +40,13 @@ node scripts/screenshot.mjs  # take screenshots (server must be running)
 |---|---|
 | Framework | Next.js 15 App Router + TypeScript strict mode |
 | Styling | Tailwind CSS v3 — utilities only, no custom CSS beyond globals.css |
-| Map | react-leaflet v4, always loaded via `dynamic(..., { ssr: false })` |
-| Routing | OSRM public server — `/route/v1/bike/` — free, no API key |
-| Geocoding | Nominatim (OSM) — free, no key, requires `User-Agent` header |
-| Autocomplete | Photon by Komoot — free, CORS-enabled, real-time, OSM-based |
-| OSM signals | Overpass API — parks, water, cycleways, green spaces |
+| Map | Google Maps JS API — always loaded via `dynamic(..., { ssr: false })` |
+| Routing | Google Directions API — driving mode, up to 3 alternatives |
+| Geocoding | Google Geocoding API (server-side, cached 24h) |
+| Autocomplete | Google Places Autocomplete (client-side, session tokens) |
+| OSM signals | Overpass API — parks, scenic roads, waterfront, viewpoints, rest stops |
+| Elevation | OpenTopoData SRTM 30m — 50 sample points per route |
 | AI | Claude Haiku `claude-haiku-4-5-20251001` via `@anthropic-ai/sdk` |
-| Screenshots | Puppeteer (headless Chrome, dev dependency) |
 
 ---
 
@@ -61,38 +57,37 @@ happy-navigator/
 ├── app/
 │   ├── api/navigate/
 │   │   └── route.ts              Server pipeline: geocode → route → score → AI
+│   ├── api/reverse/
+│   │   └── route.ts              GET handler: reverse geocode for map clicks
 │   ├── components/
+│   │   ├── GoogleMapsProvider.tsx Loads Google Maps JS API globally with Places
 │   │   ├── HappyScore.tsx        Score badge: emoji + number, color by threshold
-│   │   ├── MapView.tsx           Leaflet map: polylines, markers, FitBounds, tooltip
-│   │   ├── PlaceAutocomplete.tsx Photon autocomplete + "Did you mean?" + "No results"
-│   │   ├── RoutePanel.tsx        Route cards, score bar, signal badges, AI explanation
-│   │   └── SearchForm.tsx        Two modes: PlaceAutocomplete fields or Google Maps URL
+│   │   ├── MapView.tsx           Google Maps: polylines, markers, fit bounds
+│   │   ├── PlaceAutocomplete.tsx Google Places Autocomplete with session tokens
+│   │   ├── RouteCard.tsx         Route card with signals, breakdown, GPX export
+│   │   ├── RoutePanel.tsx        Route cards, scores, AI explanation panel
+│   │   ├── ElevationProfile.tsx  SVG elevation chart (metric/imperial)
+│   │   ├── LoadingSteps.tsx      Pipeline progress indicator
+│   │   └── SearchForm.tsx        Address / Google Maps URL input + recent searches
 │   ├── lib/
-│   │   ├── constants.ts          ROUTE_COLORS + ROUTE_LABELS (shared by MapView + RoutePanel)
-│   │   ├── happiness.ts          computeHappyScore() — weighted 0–100 formula + breakdown
-│   │   ├── nominatim.ts          geocode() — forward + reverse, detects "lat,lng" strings
-│   │   ├── osrm.ts               getBikeRoutes() — up to 3 alternatives, 15s timeout
-│   │   ├── overpass.ts           getHappinessSignals() — 6-point sample, 200m radius, 14s
-│   │   ├── parseGoogleMapsUrl.ts Parses /maps/dir/ and ?api=1&origin= URL formats
-│   │   └── photon.ts             searchPlaces() — Photon client, builds display labels
+│   │   ├── constants.ts          ROUTE_COLORS + ROUTE_NAMES
+│   │   ├── happiness.ts          computeHappyScore() — weighted 0–100 formula
+│   │   ├── lruCache.ts           Shared LRU cache utility
+│   │   ├── nominatim.ts          geocode() — Google Geocoding API
+│   │   ├── osrm.ts               getDrivingRoutes() — Google Directions, driving mode
+│   │   ├── overpass.ts           getHappinessSignals() — 10-point sample, 250m radius
+│   │   ├── elevation.ts          getRouteElevation() — OpenTopoData, 50 samples
+│   │   └── parseGoogleMapsUrl.ts Parses /maps/dir/ and ?api=1&origin= URLs
 │   ├── types/
 │   │   └── index.ts              All shared TypeScript interfaces
-│   ├── globals.css               Tailwind base + Leaflet z-index fix + .sidebar-scroll
-│   ├── layout.tsx                HTML shell + page title/description metadata
-│   └── page.tsx                  Main page: form, LoadingSteps, map, results panel
-├── scripts/
-│   └── screenshot.mjs            Puppeteer: 5 screenshots (idle/form/loading/results/route-B)
-├── .env.local                    EXISTS locally, NOT committed — real ANTHROPIC_API_KEY
-├── .env.local.example            Committed template for new devs
-├── .gitignore                    Excludes node_modules, .next, .env.local, shot-*.png
-├── CLAUDE.md                     Architecture rules loaded by Claude Code each session
-├── next.config.ts                reactStrictMode: false (Leaflet + React 18 fix)
-├── next-env.d.ts                 Auto-generated by Next.js — do not edit manually
-├── package.json                  All deps: next, react, leaflet, react-leaflet, anthropic
-├── postcss.config.mjs            Tailwind PostCSS config
+│   ├── globals.css               Tailwind base + custom styles
+│   ├── layout.tsx                HTML shell + metadata
+│   └── page.tsx                  Main page: form, loading, map, results
+├── e2e/                          Playwright e2e + integration tests
+├── docs/                         Project documentation
+├── CLAUDE.md                     Architecture rules for Claude Code
 ├── README.md                     Setup guide + run instructions
-├── tailwind.config.ts            Content paths for Tailwind
-└── tsconfig.json                 Strict mode, ES2017 target
+└── PROGRESS.md                   This file
 ```
 
 ---
@@ -104,178 +99,55 @@ happy-navigator/
 ```
 1. Parse request body (NavigateRequest)
 2. If googleMapsUrl provided → parseGoogleMapsUrl()
-   - Supports /maps/dir/PlaceA/PlaceB/ format
-   - Supports ?api=1&origin=A&destination=B format
-   - Does NOT support shortened maps.app.goo.gl (cannot follow redirects)
-   - Falls back to manual start/end fields if URL parsing fails
 3. resolveLocation() for start + end (parallel):
-   - If Photon pre-resolved coords present in request → use directly, skip Nominatim
-   - Otherwise → geocode() via Nominatim (forward geocode or reverse if "lat,lng" string)
-4. getBikeRoutes() via OSRM → up to 3 bike route alternatives
+   - If pre-resolved coords present → use directly, skip geocoding
+   - Otherwise → Google Geocoding API
+4. getDrivingRoutes() via Google Directions → up to 3 driving alternatives
 5. getHappinessSignals() for each route via Overpass (parallel)
-6. computeHappyScore() for each route → { score, breakdown }
-7. Sort routes descending by happyScore
-8. callAI() → 1 Claude Haiku call, max 450 tokens, returns JSON
-9. Validate AI bestRouteId; fall back to routes[0].id if invalid
-10. Return NavigateResponse JSON
+6. getRouteElevation() for each route via OpenTopoData (parallel)
+7. computeHappyScore() for each route → { score, breakdown }
+8. Sort routes descending by happyScore
+9. callAI() → 1 Claude Haiku call, max 450 tokens, returns JSON
+10. Validate AI bestRouteId; fall back to routes[0].id if invalid
+11. Return NavigateResponse JSON
 ```
-
-Internal helpers:
-- `resolveLocation()` — pre-coords shortcut or Nominatim geocoding
-- `shorten(name)` — trims display name to first 2 comma-parts ("Place, City")
-- `getAnthropicClient()` — lazy singleton, avoids re-instantiation on hot reload
-- `stripFences(text)` — removes backtick fences before JSON.parse
-- `export const maxDuration = 30` — Vercel serverless timeout override
-- `export const runtime = "nodejs"` — required for Anthropic SDK
-
----
-
-## External APIs
-
-| API | URL | Key? | Timeout | Notes |
-|---|---|---|---|---|
-| Nominatim | nominatim.openstreetmap.org | No | 8s | Requires User-Agent header |
-| OSRM | router.project-osrm.org/route/v1/bike/ | No | 15s | alternatives=true, geometries=geojson |
-| Overpass | overpass-api.de/api/interpreter | No | 14s | POST request, timeout:12 in query body |
-| Photon | photon.komoot.io/api | No | — | GET, CORS-enabled, limit=6&lang=en |
-| Anthropic | SDK | Yes | SDK default | claude-haiku-4-5-20251001, max_tokens:450 |
 
 ---
 
 ## Happy Score Formula (`app/lib/happiness.ts`)
 
 ```
-score = 10 (base, always)
-      + min((parkCount     / distKm) * 12,  30)   parks     → up to 30 pts
-      + min((cyclewayCount / distKm) * 10,  25)   cycleways → up to 25 pts
-      + min((waterCount    / distKm) *  8,  20)   water     → up to 20 pts
-      + min((greenCount    / distKm) *  5,  15)   green     → up to 15 pts
-      [total capped at 100]
+score = 5 (base, always)
+      + min((parkCount        / distKm) * 12,  30)   parks        → up to 30 pts
+      + min((scenicRoadCount  / distKm) * 10,  25)   scenic roads → up to 25 pts
+      + min((waterfrontCount  / distKm) *  8,  20)   waterfront   → up to 20 pts
+      + min((greenCount       / distKm) *  5,  15)   green        → up to 15 pts
+      + min((lowTrafficCount  / distKm) *  6,  15)   low traffic  → up to 15 pts
+      + min((litCount         / distKm) *  4,  10)   lit          → up to 10 pts
+      + min((restStopCount    / distKm) *  3,   8)   rest stops   → up to  8 pts
+      + min((viewpointCount   / distKm) *  2,   5)   viewpoints   → up to  5 pts
+      - min((constructionCount / distKm) * 5,  15)   construction → up to -15 pts
+      - min((elevationGainM   / distKm) *  3,  20)   elevation    → up to -20 pts
+      - min((highwayCount     / distKm) *  4,  12)   highway      → up to -12 pts
+      [final score clamped to 0–100]
+      [× 0.85 if partial data, floor 5]
 ```
 
 - Distance normalised to minimum 0.5 km to prevent division by near-zero
-- Returns `{ score: number, breakdown: ScoreBreakdown }` — breakdown shown as colored bar
 
 **What Overpass counts:**
 - Parks: `leisure=park`, `leisure=garden`
 - Green: `landuse=forest/grass/meadow/village_green`, `natural=wood/scrub/heath`
-- Water: `natural=water`, `waterway=river/canal/stream/riverbank`
-- Cycleways: `highway=cycleway`, `cycleway=lane/track/shared_lane/opposite_lane`
+- Waterfront: `natural=water`, `natural=coastline`, `waterway=river/canal/riverbank`
+- Scenic roads: `highway=secondary/tertiary/unclassified`
+- Low traffic: `highway=residential/living_street`
+- Viewpoints: `tourism=viewpoint`
+- Rest stops: `amenity=rest_area/cafe/picnic_site`, `highway=rest_area`
+- Construction: `highway=construction` (penalty)
+- Highway: `highway=motorway/trunk` (penalty)
 
-**Sampling:** 6 points evenly distributed along the route (always includes first and last).
-**Radius:** 200m around each sample point. One compound Overpass query per route.
-
----
-
-## Component Details
-
-### `PlaceAutocomplete.tsx`
-- 280ms debounce before firing Photon search
-- AbortController cancels in-flight requests when user keeps typing
-- Dropdown: up to 6 results with OSM-type emoji icons
-  (park=🌳, station=🚉, city=🏙️, cafe=☕, museum=🏛️, restaurant=🍽️, etc.)
-- Keyboard: ArrowUp/Down navigate, Enter commits, Escape closes
-- Green ✓ badge when coords resolved, spinner while loading, × clear button
-- `PlaceValue = { text: string, coords?: { lat: number, lng: number } }`
-- **"Did you mean?" hint** (green, clickable): shown when user closes dropdown without selecting a result
-- **"No places found" hint** (amber): shown when Photon returns 0 results for the query
-- Both hints clear when user starts typing again
-- `aria-autocomplete`, `aria-expanded`, `aria-activedescendant`, `aria-selected` for accessibility
-- `onMouseDown + e.preventDefault()` prevents blur-before-commit race condition
-
-### `HappyScore.tsx`
-- Score ≥ 70 → 😊 emerald green ring
-- Score 40–69 → 😐 amber ring
-- Score < 40 → 😕 gray ring
-- Size `sm`: inline pill (used in route cards)
-- Size `md`: square card with /100 subtitle
-
-### `MapView.tsx`
-- 3 polyline colors: emerald `#10b981`, blue `#3b82f6`, orange `#f97316`
-- Selected route: weight 7, opacity 0.95, drawn last (on top in SVG stacking)
-- Unselected: weight 3, opacity 0.35, drawn first
-- Click polyline to select route (synced with sidebar)
-- Hover tooltip: `"Route A — Score: 72/100"`
-- Start marker: green filled CircleMarker, permanent "Start" tooltip
-- End marker: red filled CircleMarker, permanent "End" tooltip
-- `FitBounds`: auto-fits all routes on new result (48px padding), re-runs only when routes change
-- `indexById` useMemo: O(1) route id → color/label index lookup
-- `renderOrder` useMemo: unselected routes rendered first (correct SVG stacking)
-- `handleSelect` useCallback: stable reference, prevents render cascade
-- Coordinate order: `[lng, lat]` (OSRM/GeoJSON) → `[lat, lng]` (Leaflet) — swapped here only
-
-### `RoutePanel.tsx`
-- "Happy Route Found!" card (emerald): AI bullet points + optional suggested stops
-- Route cards (up to 3): label, color dot, HappyScore badge, distance, time
-- Score breakdown bar: emerald=parks, violet=cycleways, sky=water, lime=green, gray=base
-- Signal badges: 🌳 N parks, 💧 N water, 🚴 N cycle paths, 🌿 N green
-- "~ partial data" badge when Overpass timed out
-- "No nearby green/cycle features found" italic text when all signal counts are zero
-- `fmtDist`: metres below 1 km, km with 1 decimal above
-- `fmtTime`: "< 1 min" | "N min" | "N h" | "N h M min"
-- `aria-pressed` on route buttons for screen reader selected state
-
-### `SearchForm.tsx`
-- Tab bar toggles: **Type addresses** | **Paste Maps URL**
-- Address mode: two `PlaceAutocomplete` fields (From / To)
-- URL mode: URL text input + optional fallback `PlaceAutocomplete` fields
-- Fallback shown only after clicking "URL not parsing correctly?" link
-- Submit button disabled until required fields are non-empty and not loading
-
-### `page.tsx` — LoadingSteps animation
-- 4 steps, each activates 4.5s after the previous:
-  1. Geocoding your locations… 📍 (at 0s)
-  2. Fetching bike route alternatives… 🛤️ (at 4.5s)
-  3. Scanning parks, water & cycleways… 🌿 (at 9s)
-  4. AI is finding your happiest route… ✨ (at 13.5s)
-- Current step: bold text + pulsing emoji
-- Completed steps: struck-through gray text + ✓ circle
-- Future steps: faded (opacity-20)
-
-### `globals.css`
-- Tailwind base/components/utilities
-- `.leaflet-container { z-index: 0 }` — prevents Leaflet z-index fighting Next.js layout
-- `.sidebar-scroll` — 4px WebKit scrollbar (gray-300, rounded) + Firefox `scrollbar-width: thin`
-
----
-
-## TypeScript Types (`app/types/index.ts`)
-
-```typescript
-Coordinates      { lat: number, lng: number }
-
-HappinessSignals { parkCount: number, waterCount: number,
-                   cyclewayCount: number, greenCount: number, partial: boolean }
-
-ScoreBreakdown   { parks: number,     // 0–30
-                   cycleways: number, // 0–25
-                   water: number,     // 0–20
-                   green: number,     // 0–15
-                   base: number }     // always 10
-
-ScoredRoute      { id: number, geometry: [number,number][], // [lng,lat]
-                   distance: number, duration: number,
-                   signals: HappinessSignals, happyScore: number,
-                   scoreBreakdown: ScoreBreakdown }
-
-AIExplanation    { bestRouteId: number, bullets: string[], suggestedStops?: string[] }
-
-NavigateResponse { routes, bestRouteId, explanation, startCoords, endCoords,
-                   startName, endName }
-
-NavigateRequest  { start?, end?, startCoords?, endCoords?, googleMapsUrl? }
-```
-
----
-
-## Shared Constants (`app/lib/constants.ts`)
-
-```typescript
-ROUTE_COLORS = ["#10b981", "#3b82f6", "#f97316"]  // emerald, blue, orange
-ROUTE_LABELS = ["Route A", "Route B", "Route C"]
-```
-
-Imported by both MapView and RoutePanel — keeps display consistent, avoids coupling.
+**Sampling:** 10 points evenly distributed along the route (always includes first and last).
+**Radius:** 250m around each sample point. One compound Overpass query per route.
 
 ---
 
@@ -283,13 +155,13 @@ Imported by both MapView and RoutePanel — keeps display consistent, avoids cou
 
 | Rule | Reason |
 |---|---|
-| `reactStrictMode: false` in next.config.ts | React 18 Strict Mode double-invokes effects; Leaflet throws "Map container is already initialized" |
-| MapView must be `dynamic(..., { ssr: false })` | Leaflet requires browser DOM, crashes on SSR |
-| Geometry is `[lng, lat]` everywhere | OSRM/GeoJSON order — only swap to `[lat, lng]` inside MapView, nowhere else |
+| MapView must be `dynamic(..., { ssr: false })` | Google Maps JS API requires browser DOM |
+| GoogleMapsProvider wraps entire app | Loads Maps script once with Places library |
+| Geometry is `[lng, lat]` everywhere | GeoJSON order — only swap to `{ lat, lng }` inside MapView |
 | Overpass must never throw | Always return `partial: true` on failure so routes still render |
-| All external API calls server-side only | Never call Overpass, OSRM, Nominatim, or AI from browser code |
+| All external API calls server-side only | Never call Overpass, Directions, Geocoding, or AI from browser |
 | One AI call per search | Haiku max 450 tokens — keep cheap (~$0.001/search) |
-| `GH_CONFIG_DIR` needed for `gh` in bash | Token stored at `C:\Users\clevine\AppData\Roaming\GitHub CLI` |
+| AI is explanation-only | `bestRouteId` always equals `scoredRoutes[0].id` — AI never overrides |
 
 ---
 
@@ -297,9 +169,11 @@ Imported by both MapView and RoutePanel — keeps display consistent, avoids cou
 
 ```env
 # .env.local (exists locally, NOT committed)
-AI_PROVIDER=anthropic          # default; set to "openai" to use OpenAI instead
-ANTHROPIC_API_KEY=sk-ant-...   # required when AI_PROVIDER=anthropic
-# OPENAI_API_KEY=sk-...        # required when AI_PROVIDER=openai (+ npm install openai)
+AI_PROVIDER=anthropic
+ANTHROPIC_API_KEY=sk-ant-...
+NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=...
+# GOOGLE_MAPS_SERVER_KEY=...          # optional: separate server key
+# OPENAI_API_KEY=sk-...               # only if AI_PROVIDER=openai
 ```
 
 ---
@@ -307,44 +181,3 @@ ANTHROPIC_API_KEY=sk-ant-...   # required when AI_PROVIDER=anthropic
 ## License
 
 MIT
-
----
-
-## Git and GitHub
-
-```bash
-git add <files>
-git commit -m "your message"
-git push
-
-# gh CLI in bash sessions needs:
-GH_CONFIG_DIR="C:\Users\clevine\AppData\Roaming\GitHub CLI" gh <command>
-```
-
-Account: **chaimmega** | Repo: **chaimmega/happy-navigator** | Branch: `main`
-
----
-
-## Known Limitations
-
-- Shortened Maps URLs (`maps.app.goo.gl`) cannot be parsed — must use full URL
-- OSRM public server is shared — can be slow at peak times
-- Overpass can time out → `partial: true` — scores still show but less accurate
-- Photon works best for well-known places — obscure addresses may need exact input
-- No caching — first search takes 15–20s on free APIs
-- OpenAI provider path exists in code but requires `npm install openai` + `AI_PROVIDER=openai` in `.env.local`
-- README.md has a broken image link (`docs/screenshot.png`) — the `docs/` folder was never created; safe to ignore or delete that line
-
----
-
-## Potential Future Features
-
-| Feature | Notes |
-|---|---|
-| Deploy to Vercel | Connect GitHub repo, add `ANTHROPIC_API_KEY` env var — one click |
-| Route caching | Redis/KV — same pair returns instantly |
-| Share link | Encode start/end coords in URL query string |
-| GPX export | Download route for bike GPS devices |
-| Elevation penalty | BRouter or OpenTopoData API |
-| Mobile layout | Sidebar collapses to bottom sheet on small screens |
-| More route alternatives | OSRM supports up to 5; currently capped at 3 |

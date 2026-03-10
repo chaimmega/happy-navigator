@@ -1,6 +1,6 @@
 # Happy Navigator
 
-> Find the happiest canoe route between two locations — scored by waterways, parks, calm water, lighting, portage difficulty, and motorboat traffic.
+> Find the happiest driving route between two locations — scored by scenic roads, parks, waterfront, greenery, low traffic, and pleasant surroundings.
 
 ![Happy Navigator screenshot](docs/screenshot.png)
 
@@ -8,26 +8,26 @@
 
 ## What it does
 
-Given a **put-in** and **take-out** location (or a pasted Google Maps directions URL), Happy Navigator:
+Given a **start** and **destination** (or a pasted Google Maps directions URL), Happy Navigator:
 
-1. **Geocodes** both addresses via [Nominatim](https://nominatim.openstreetmap.org/) (free, no key).
-2. **Fetches 2–3 route alternatives** from the [OSRM](http://project-osrm.org/) public foot routing server.
+1. **Geocodes** both addresses via Google Geocoding API (server-side).
+2. **Fetches 2–3 driving route alternatives** from Google Directions API.
 3. **Scores each route** by querying [OpenStreetMap Overpass API](https://overpass-api.de/) for:
    - Parks & gardens (`leisure=park`)
    - Green land-use (forests, meadows, woodland)
-   - Water features (rivers, lakes, canals)
-   - Dedicated waterways (`waterway=river/canal/stream`)
-   - Boat launches and canoe put-in points (`leisure=slipway`, `canoe=put_in`)
-   - Portage access points (`portage=yes`)
+   - Waterfront features (rivers, lakes, coastline)
+   - Scenic roads (secondary, tertiary, unclassified — quieter roads)
+   - Low-traffic segments (residential, living streets)
+   - Viewpoints (`tourism=viewpoint`)
+   - Rest stops (rest areas, cafés, picnic sites)
    - Street lighting (`lit=yes`)
-   - **Calm water sections** (lakes, ponds — sheltered paddling)
-   - **Rapids penalty** (whitewater rapid grades — difficulty)
-   - **Motorboat traffic penalty** (motorboat zones — safety hazard)
+   - **Construction zones penalty** (road construction)
+   - **Highway penalty** (motorway/trunk road segments — stressful driving)
 4. **Fetches elevation data** via [OpenTopoData SRTM 30m](https://www.opentopodata.org/) (50 sample points for accurate profiles).
 5. **Calls an LLM once** (Anthropic Claude Haiku) with a compact JSON summary to confirm the best route and explain why.
-6. **Displays everything** on an interactive Leaflet/OpenStreetMap map with a detailed side panel.
+6. **Displays everything** on an interactive Google Map with a detailed side panel.
 
-**All routing, geocoding, and map data are free and open.** Only the AI explanation requires an API key.
+**Only the AI explanation and Google APIs require API keys.**
 
 ---
 
@@ -39,15 +39,15 @@ Browser
         ├── app/page.tsx              — main UI (responsive, metric toggle, map pins)
         ├── app/components/
         │     ├── SearchForm.tsx      — address / Google Maps URL input + recent searches
-        │     ├── MapView.tsx         — Leaflet map (Topo tile toggle, map click handler)
+        │     ├── MapView.tsx         — Google Maps (route polylines, markers, fit bounds)
         │     ├── RoutePanel.tsx      — route cards, scores, GPX export, AI explanation
         │     ├── ElevationProfile.tsx — SVG elevation chart (metric/imperial)
         │     └── HappyScore.tsx      — score badge component
         └── app/api/
               ├── navigate/route.ts   — POST handler (full scoring pipeline, rate limiting)
               └── reverse/route.ts    — GET handler (reverse geocode for map clicks)
-                    ├── lib/nominatim.ts    — geocoding via Nominatim
-                    ├── lib/osrm.ts         — canoe routing via OSRM (foot profile)
+                    ├── lib/nominatim.ts    — geocoding via Google Geocoding API
+                    ├── lib/osrm.ts         — driving routes via Google Directions API
                     ├── lib/overpass.ts     — OSM feature queries (fallback servers)
                     ├── lib/elevation.ts    — elevation via OpenTopoData SRTM 30m
                     ├── lib/happiness.ts    — weighted scoring formula
@@ -62,6 +62,7 @@ Browser
 
 - [Node.js](https://nodejs.org/) v18 or later
 - An **Anthropic API key** (get one at [console.anthropic.com](https://console.anthropic.com/settings/keys))
+- A **Google Maps API key** (enable Geocoding, Directions, Maps JS, and Places APIs)
 
 ### 1 — Clone and install
 
@@ -82,6 +83,8 @@ Fill in `.env.local`:
 ```env
 AI_PROVIDER=anthropic
 ANTHROPIC_API_KEY=sk-ant-...
+NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=...
+# GOOGLE_MAPS_SERVER_KEY=...   # optional: separate key for server-side calls
 ```
 
 **Using OpenAI instead?**
@@ -110,9 +113,9 @@ Open [http://localhost:3000](http://localhost:3000).
 ## Usage
 
 **Type addresses:**
-1. Enter put-in/take-out (autocomplete via Photon/Komoot)
+1. Enter start/destination (autocomplete via Google Places)
 2. Use GPS button for current location
-3. Click ⇅ to swap put-in and take-out
+3. Click swap button to swap start and destination
 4. Click **Find Happy Routes**
 
 **Paste a Google Maps URL:**
@@ -120,11 +123,9 @@ Open [http://localhost:3000](http://localhost:3000).
 - `https://www.google.com/maps/dir/?api=1&origin=...&destination=...`
 
 **Map pin mode (desktop):**
-- Click **📍 Pin start** or **📍 Pin end** in the header to set locations by clicking the map
+- Click **Pin start** or **Pin end** in the header to set locations by clicking the map
 
 **Units:** Toggle km/mi in the header (preference saved in localStorage)
-
-**Tile layers:** Click the map layer button to switch between standard OpenStreetMap and **Topo** (topographic map showing terrain)
 
 **Export:** Click **Export GPX** on the selected route to download for GPS devices
 
@@ -138,17 +139,17 @@ Open [http://localhost:3000](http://localhost:3000).
 
 ```
 score = 5 (base)
-      + min((parks     / km) × 12, 30)   ← up to 30 pts
-      + min((waterways / km) × 10, 25)   ← up to 25 pts (dedicated waterways)
-      + min((water     / km) × 8,  20)   ← up to 20 pts
-      + min((green     / km) × 5,  15)   ← up to 15 pts
-      + min((calmWater / km) × 6,  15)   ← up to 15 pts  (sheltered/calm sections)
-      + min((launch    / km) × 3,   8)   ← up to  8 pts  (boat launches, put-in)
-      + min((lit       / km) × 4,  10)   ← up to 10 pts
-      + min((portage   / km) × 2,   5)   ← up to  5 pts
-      − min((rapids    / km) × 5,  15)   ← up to −15 pts (whitewater difficulty)
-      − min((elevation / km) × 3,  20)   ← up to −20 pts (steep portage terrain)
-      − min((motorBoat / km) × 4,  12)   ← up to −12 pts (motorboat traffic zones)
+      + min((parks       / km) × 12, 30)   ← up to 30 pts
+      + min((scenicRoads / km) × 10, 25)   ← up to 25 pts (scenic roads)
+      + min((waterfront  / km) × 8,  20)   ← up to 20 pts (waterfront areas)
+      + min((green       / km) × 5,  15)   ← up to 15 pts
+      + min((lowTraffic  / km) × 6,  15)   ← up to 15 pts (low-traffic roads)
+      + min((lit         / km) × 4,  10)   ← up to 10 pts
+      + min((restStops   / km) × 3,   8)   ← up to  8 pts (rest areas, cafés)
+      + min((viewpoints  / km) × 2,   5)   ← up to  5 pts (scenic viewpoints)
+      − min((construction / km) × 5, 15)   ← up to −15 pts (construction zones)
+      − min((elevation   / km) × 3,  20)   ← up to −20 pts (steep terrain)
+      − min((highway     / km) × 4,  12)   ← up to −12 pts (motorway segments)
 ```
 
 All counts normalised per km. Final score clamped to 0–100.
@@ -164,10 +165,10 @@ To adjust weights, edit `app/lib/happiness.ts` only.
 | Framework | Next.js 15 (App Router) |
 | Language | TypeScript (strict) |
 | Styling | Tailwind CSS v3 |
-| Map | Leaflet + react-leaflet |
-| Tile layers | OpenStreetMap standard + OpenTopoMap |
-| Geocoding | Nominatim + Photon/Komoot autocomplete |
-| Routing | OSRM public foot server |
+| Map | Google Maps JS API |
+| Geocoding | Google Geocoding API (server-side) |
+| Places | Google Places Autocomplete (client-side) |
+| Routing | Google Directions API (driving mode) |
 | OSM data | Overpass API (with fallback to overpass.kumi.systems) |
 | Elevation | OpenTopoData SRTM 30m (50 sample points) |
 | AI | Anthropic Claude Haiku (~$0.001/search) |
@@ -190,16 +191,17 @@ To adjust weights, edit `app/lib/happiness.ts` only.
 | `AI_PROVIDER` | No | `anthropic` | `anthropic` or `openai` |
 | `ANTHROPIC_API_KEY` | If anthropic | — | Anthropic API key |
 | `OPENAI_API_KEY` | If openai | — | OpenAI API key |
+| `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` | Yes | — | Google Maps JS API + Places (client) |
+| `GOOGLE_MAPS_SERVER_KEY` | No | — | Separate key for Geocoding + Directions (server) |
 
 ---
 
 ## Limitations
 
-- **OSRM public server** has no SLA. For production, self-host or use [OpenRouteService](https://openrouteservice.org/) free tier.
 - **Overpass API** rate-limits heavy usage. Conservative query: 10 sampled points, 250 m radius.
 - **Rate limiting**: 10 requests/minute per IP (in-memory, resets on server restart).
 - **Google Maps shortened URLs** (`maps.app.goo.gl`) can't be parsed client-side — use the fallback address fields.
-- The Happy Score is a heuristic proxy. Real-world conditions (water levels, portage closures) aren't reflected.
+- The Happy Score is a heuristic proxy. Real-world conditions (road closures, live traffic) aren't reflected.
 
 ---
 

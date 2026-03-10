@@ -252,23 +252,23 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // ── 3. Fetch routes from OSRM ───────────────────────────────────────────────
-  let osrmRoutes;
+  // ── 3. Fetch driving routes ─────────────────────────────────────────────────
+  let directionsRoutes;
   try {
-    osrmRoutes = await getDrivingRoutes(
+    directionsRoutes = await getDrivingRoutes(
       { lat: startGeo.lat, lng: startGeo.lng },
       { lat: endGeo.lat, lng: endGeo.lng },
       viaCoords
     );
   } catch (err) {
-    console.error("[navigate] OSRM error:", err);
+    console.error("[navigate] Directions error:", err);
     return NextResponse.json(
       { error: "Could not fetch routes. The routing service may be temporarily unavailable." },
       { status: 502 }
     );
   }
 
-  if (!osrmRoutes.length) {
+  if (!directionsRoutes.length) {
     return NextResponse.json(
       { error: "No routes found between these locations." },
       { status: 404 }
@@ -276,9 +276,9 @@ export async function POST(req: NextRequest) {
   }
 
   // ── 4. Score each route (parallel Overpass + elevation) ─────────────────────
-  console.log(`[navigate] scoring ${osrmRoutes.length} route(s) via Overpass + elevation…`);
+  console.log(`[navigate] scoring ${directionsRoutes.length} route(s) via Overpass + elevation…`);
   const scoredRoutes: ScoredRoute[] = await Promise.all(
-    osrmRoutes.map(async (route, i) => {
+    directionsRoutes.map(async (route, i) => {
       const [signals, elevResult] = await Promise.all([
         getHappinessSignals(route.geometry.coordinates),
         getRouteElevation(route.geometry.coordinates),

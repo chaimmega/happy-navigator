@@ -5,10 +5,10 @@
 ### Core app
 - Next.js 15 App Router + TypeScript strict + Tailwind CSS
 - Google Maps JS API (client) — map display, Places Autocomplete with session tokens
-- Google Directions API (server) — canoe route alternatives (walking mode, up to 3 routes)
+- Google Directions API (server) — driving route alternatives (driving mode, up to 3 routes)
 - Google Geocoding API (server) — forward + reverse geocoding
 - Overpass (OpenStreetMap) — happiness signal detection along route corridor
-- OpenTopoData — elevation gain for portage penalty scoring
+- OpenTopoData — elevation gain for terrain penalty scoring
 - Claude Haiku AI — one call per search, explains why the top route is happiest
 - GPX export for selected route
 - URL sharing (`?from=&to=` params, auto-search on load)
@@ -16,12 +16,12 @@
 - Via-point (waypoint) support
 - Recent searches (localStorage)
 - Metric/imperial toggle (localStorage)
-- Calories + CO₂ savings estimates per route
+- Calories + CO2 savings estimates per route
 - Elevation profile chart for selected route
 
 ### Scoring
-- Weighted 0–100 Happy Score: parks (30), waterways (25), water (20), green (15), calm water (15), lit (10), launches (8), portage (5), base (5)
-- Penalties: rapids (−15), elevation (−20), motorboat zones (−12)
+- Weighted 0–100 Happy Score: parks (30), scenic roads (25), waterfront (20), green (15), low traffic (15), lit (10), rest stops (8), viewpoints (5), base (5)
+- Penalties: construction (−15), elevation (−20), highway segments (−12)
 - Partial data penalty: 15% reduction, floor 5
 - `bestRouteId` always equals top scorer — AI is explanation-only, never overrides ranking
 
@@ -86,8 +86,8 @@
 - **Offline / PWA support** — cache recent routes for offline viewing
 - **Route sharing** — generate a short URL or share card (currently only `?from=&to=` coords)
 - **Multi-stop routes** — currently supports one via-point; allow a full itinerary
-- **Paddling time estimate** — current estimate uses walking duration; a canoe-specific speed (avg 4–5 km/h) would be more accurate
-- **Difficulty rating** — surface a human-readable difficulty label (easy/moderate/hard) based on rapids + elevation signals
+- **Driving time accuracy** — consider live traffic data via Google Routes API for more accurate ETAs
+- **Road quality rating** — surface a human-readable comfort label (pleasant/mixed/stressful) based on scenic roads + highway ratio
 
 ### Testing
 - **Un-skip live smoke tests** (`e2e/smoke/live.spec.ts`) and integrate into CI with real keys

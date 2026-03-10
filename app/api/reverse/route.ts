@@ -5,7 +5,7 @@ export const runtime = "nodejs";
 
 /**
  * GET /api/reverse?lat=...&lng=...
- * Reverse-geocodes a coordinate pair via Nominatim (server-side, no CORS issues).
+ * Reverse-geocodes a coordinate pair via Google Geocoding API (server-side).
  * Used by MapView when the user clicks the map to set a start/end location.
  */
 export async function GET(req: NextRequest) {

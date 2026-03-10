@@ -16,17 +16,17 @@ e2e/integration/api.integration.spec.ts
 |---|---|---|
 | **Response structure** | 6 | HTTP 200, required fields present, routes non-empty, per-route schema, score 0–100, descending sort order |
 | **Scoring invariants** | 4 | `bestRouteId === routes[0].id`, base score always 5, all breakdown values ≥ 0, partial-data penalty ≤ 85 |
-| **Waterway detection** | 3 | Charles River (Boston) has `waterwayCount`/`waterCount` > 0, score > base, AI bullets present |
+| **Scenic feature detection** | 3 | Charles River (Boston) has `waterfrontCount`/`scenicRoadCount` > 0, score > base, AI bullets present |
 | **Error handling** | 2 | Missing `start` → 400, missing `end` → 400 |
-| **Score comparison** | 2 | Riverside Park (NYC) waterfront has water signals, `parks + waterways + water` breakdown > 0 |
+| **Score comparison** | 2 | Riverside Park (NYC) waterfront has scenic signals, `parks + scenicRoads + waterfront` breakdown > 0 |
 
 ### Locations used
 
 | Route | Coordinates | Why |
 |---|---|---|
-| Hudson River, NYC | Inwood Hill Park → The Battery | Dense OSM waterway data, reliable routing |
-| Charles River, Boston | Cambridge → Back Bay | Well-mapped urban waterway |
-| Riverside Park, NYC | 79th St → 96th St waterfront | Predictable park + water signals |
+| Hudson River, NYC | Inwood Hill Park → The Battery | Dense OSM data, reliable driving routes |
+| Charles River, Boston | Cambridge → Back Bay | Well-mapped urban area with waterfront |
+| Riverside Park, NYC | 79th St → 96th St | Predictable park + waterfront signals |
 
 ## How to run
 
