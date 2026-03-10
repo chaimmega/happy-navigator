@@ -3,17 +3,17 @@
 import { useEffect, useMemo, useCallback, useState, useRef } from "react";
 import { GoogleMap, Polyline, Marker, InfoWindow } from "@react-google-maps/api";
 import type { ScoredRoute, Coordinates } from "../types";
-import { ROUTE_COLORS, ROUTE_LABELS } from "../lib/constants";
+import { ROUTE_COLORS, ROUTE_NAMES } from "../lib/constants";
 
 const MAP_CONTAINER_STYLE = { height: "100%", width: "100%" };
-
-// ─── Main component ────────────────────────────────────────────────────────
 
 interface MapViewProps {
   routes: ScoredRoute[];
   selectedRouteId: number;
   startCoords: Coordinates;
   endCoords: Coordinates;
+  startName: string;
+  endName: string;
   onSelectRoute: (id: number) => void;
   onMapClick?: (lat: number, lng: number) => void;
 }
@@ -28,11 +28,6 @@ export default function MapView({
 }: MapViewProps) {
   const mapRef = useRef<google.maps.Map | null>(null);
   const [activeTooltip, setActiveTooltip] = useState<number | null>(null);
-
-  const indexById = useMemo(
-    () => new Map(routes.map((r, i) => [r.id, i])),
-    [routes]
-  );
 
   const handleSelect = useCallback(
     (id: number) => onSelectRoute(id),
@@ -71,8 +66,6 @@ export default function MapView({
     [onMapClick]
   );
 
-
-
   return (
     <div className="relative h-full w-full">
       <GoogleMap
@@ -90,11 +83,9 @@ export default function MapView({
         onLoad={(map) => { mapRef.current = map; }}
         onClick={onMapClick ? handleMapClick : undefined}
       >
-        {/* Route polylines */}
         {renderOrder.map((route) => {
-          const index = indexById.get(route.id) ?? 0;
           const isSelected = route.id === selectedRouteId;
-          const color = ROUTE_COLORS[index % ROUTE_COLORS.length];
+          const color = ROUTE_COLORS[route.id] || ROUTE_COLORS[0];
           const path = route.geometry.map(([lng, lat]) => ({ lat, lng }));
 
           return (
@@ -118,14 +109,11 @@ export default function MapView({
           );
         })}
 
-        {/* Route tooltip on hover */}
         {activeTooltip !== null && (() => {
           const route = routes.find((r) => r.id === activeTooltip);
           if (!route || !route.geometry.length) return null;
           const midIdx = Math.floor(route.geometry.length / 2);
           const [lng, lat] = route.geometry[midIdx];
-          const index = indexById.get(route.id) ?? 0;
-          const label = ROUTE_LABELS[index % ROUTE_LABELS.length];
           return (
             <InfoWindow
               position={{ lat, lng }}
@@ -133,13 +121,12 @@ export default function MapView({
               onCloseClick={() => setActiveTooltip(null)}
             >
               <div className="text-xs font-medium text-gray-700 whitespace-nowrap">
-                {label} — Score: {route.happyScore}/100
+                {ROUTE_NAMES[route.id]} — Score: {route.happyScore}/100
               </div>
             </InfoWindow>
           );
         })()}
 
-        {/* Start marker — green */}
         <Marker
           position={{ lat: startCoords.lat, lng: startCoords.lng }}
           icon={{
@@ -159,7 +146,6 @@ export default function MapView({
           title="Start"
         />
 
-        {/* End marker — red */}
         <Marker
           position={{ lat: endCoords.lat, lng: endCoords.lng }}
           icon={{
@@ -181,7 +167,7 @@ export default function MapView({
       </GoogleMap>
 
       {onMapClick && (
-        <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[1000] bg-white/90 backdrop-blur-sm border border-gray-200 shadow-sm rounded-full px-3 py-1 text-xs text-gray-500 pointer-events-none">
+        <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[1000] bg-card/90 backdrop-blur-sm border border-border shadow-sm rounded-full px-3 py-1 text-xs text-muted-foreground pointer-events-none">
           Click map to set location
         </div>
       )}

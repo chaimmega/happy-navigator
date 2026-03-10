@@ -1,73 +1,79 @@
 "use client";
 
+import { motion } from "framer-motion";
+import { getScoreTier } from "../types";
+
 interface HappyScoreProps {
   score: number;
   size?: "sm" | "md" | "lg";
+  animate?: boolean;
 }
 
-export default function HappyScore({ score, size = "md" }: HappyScoreProps) {
-  const color =
-    score >= 70
-      ? { stroke: "#059669", text: "text-emerald-700", bg: "bg-emerald-50", ring: "ring-emerald-200" }
-      : score >= 40
-      ? { stroke: "#d97706", text: "text-amber-600", bg: "bg-amber-50", ring: "ring-amber-200" }
-      : { stroke: "#9ca3af", text: "text-gray-500", bg: "bg-gray-50", ring: "ring-gray-200" };
+export default function HappyScore({ score, size = "md", animate = true }: HappyScoreProps) {
+  const tier = getScoreTier(score);
 
-  const label = score >= 70 ? "Scenic" : score >= 40 ? "Okay" : "Low";
+  const tierColors = {
+    scenic: { stroke: "hsl(160, 84%, 39%)", bg: "hsl(152, 81%, 96%)", text: "hsl(163, 94%, 24%)" },
+    okay: { stroke: "hsl(38, 92%, 50%)", bg: "hsl(48, 96%, 89%)", text: "hsl(32, 95%, 44%)" },
+    low: { stroke: "hsl(220, 9%, 46%)", bg: "hsl(220, 14%, 96%)", text: "hsl(220, 9%, 46%)" },
+  };
+
+  const colors = tierColors[tier];
+  const tierLabel = tier === "scenic" ? "Scenic" : tier === "okay" ? "Okay" : "Low";
 
   if (size === "sm") {
     return (
       <span
-        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full ring-1 text-xs font-bold ${color.text} ${color.bg} ${color.ring}`}
+        className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold"
+        style={{ backgroundColor: colors.bg, color: colors.text }}
       >
         {score}
       </span>
     );
   }
 
-  // Circular progress ring
-  const radius = size === "lg" ? 28 : 20;
+  const diameter = size === "lg" ? 64 : 48;
+  const strokeWidth = size === "lg" ? 4 : 3.5;
+  const radius = (diameter - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
-  const progress = Math.max(0, Math.min(100, score)) / 100;
-  const dashOffset = circumference * (1 - progress);
-  const svgSize = (radius + 4) * 2;
+  const offset = circumference - (score / 100) * circumference;
 
   return (
-    <div className="flex flex-col items-center gap-0.5 flex-shrink-0">
-      <svg width={svgSize} height={svgSize} className="transform -rotate-90">
-        <circle
-          cx={svgSize / 2}
-          cy={svgSize / 2}
-          r={radius}
-          fill="none"
-          stroke="#e5e7eb"
-          strokeWidth={size === "lg" ? 4 : 3}
-        />
-        <circle
-          cx={svgSize / 2}
-          cy={svgSize / 2}
-          r={radius}
-          fill="none"
-          stroke={color.stroke}
-          strokeWidth={size === "lg" ? 4 : 3}
-          strokeDasharray={circumference}
-          strokeDashoffset={dashOffset}
-          strokeLinecap="round"
-          className="transition-all duration-700 ease-out"
-        />
-        <text
-          x={svgSize / 2}
-          y={svgSize / 2}
-          textAnchor="middle"
-          dominantBaseline="central"
-          className={`${size === "lg" ? "text-base" : "text-xs"} font-bold fill-current ${color.text}`}
-          transform={`rotate(90, ${svgSize / 2}, ${svgSize / 2})`}
-        >
-          {score}
-        </text>
-      </svg>
+    <div className="flex flex-col items-center gap-1">
+      <div className="relative" style={{ width: diameter, height: diameter }}>
+        <svg width={diameter} height={diameter} className="-rotate-90">
+          <circle
+            cx={diameter / 2}
+            cy={diameter / 2}
+            r={radius}
+            fill="none"
+            stroke="hsl(var(--border))"
+            strokeWidth={strokeWidth}
+          />
+          <motion.circle
+            cx={diameter / 2}
+            cy={diameter / 2}
+            r={radius}
+            fill="none"
+            stroke={colors.stroke}
+            strokeWidth={strokeWidth}
+            strokeLinecap="round"
+            strokeDasharray={circumference}
+            initial={animate ? { strokeDashoffset: circumference } : { strokeDashoffset: offset }}
+            animate={{ strokeDashoffset: offset }}
+            transition={{ duration: 0.7, ease: "easeOut", delay: 0.2 }}
+          />
+        </svg>
+        <div className="absolute inset-0 flex items-center justify-center">
+          <span className="text-sm font-bold" style={{ color: colors.text }}>
+            {score}
+          </span>
+        </div>
+      </div>
       {size === "lg" && (
-        <span className="text-[10px] font-medium text-gray-400 tracking-wide">{label}</span>
+        <span className="text-[10px] font-medium uppercase tracking-widest" style={{ color: colors.text }}>
+          {tierLabel}
+        </span>
       )}
     </div>
   );

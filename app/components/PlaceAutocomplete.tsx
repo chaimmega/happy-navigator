@@ -2,7 +2,10 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+export interface PlaceValue {
+  text: string;
+  coords?: { lat: number; lng: number };
+}
 
 interface PlacePrediction {
   displayName: string;
@@ -10,29 +13,18 @@ interface PlacePrediction {
   placeId: string;
 }
 
-export interface PlaceValue {
-  text: string;
-  coords?: { lat: number; lng: number };
-}
-
 interface PlaceAutocompleteProps {
-  label: string;
   placeholder: string;
   value: PlaceValue;
   onChange: (value: PlaceValue) => void;
-  required?: boolean;
   autoFocus?: boolean;
   id?: string;
 }
 
-// ─── Component ────────────────────────────────────────────────────────────────
-
 export default function PlaceAutocomplete({
-  label,
   placeholder,
   value,
   onChange,
-  required,
   autoFocus,
   id,
 }: PlaceAutocompleteProps) {
@@ -50,7 +42,6 @@ export default function PlaceAutocomplete({
   const geocoder = useRef<google.maps.Geocoder | null>(null);
   const sessionToken = useRef<google.maps.places.AutocompleteSessionToken | null>(null);
 
-  // Initialize services when google is available
   useEffect(() => {
     const init = () => {
       if (typeof google !== "undefined" && google.maps?.places) {
@@ -60,12 +51,10 @@ export default function PlaceAutocomplete({
       }
     };
     init();
-    // Retry after a short delay in case Google Maps script hasn't loaded yet
     const timer = setTimeout(init, 1000);
     return () => clearTimeout(timer);
   }, []);
 
-  // Close dropdown when user clicks outside
   useEffect(() => {
     function onMouseDown(e: MouseEvent) {
       if (!containerRef.current?.contains(e.target as Node)) {
@@ -76,7 +65,6 @@ export default function PlaceAutocomplete({
     return () => document.removeEventListener("mousedown", onMouseDown);
   }, []);
 
-  // Scroll active item into view
   useEffect(() => {
     if (activeIdx >= 0 && listRef.current) {
       listRef.current.children[activeIdx]?.scrollIntoView({ block: "nearest" });
@@ -158,7 +146,6 @@ export default function PlaceAutocomplete({
       setResults([]);
       setActiveIdx(-1);
       setNoResults(false);
-      // Session token is consumed after selection — create a new one for the next search
       if (typeof google !== "undefined") {
         sessionToken.current = new google.maps.places.AutocompleteSessionToken();
       }
@@ -202,25 +189,16 @@ export default function PlaceAutocomplete({
 
   return (
     <div ref={containerRef} className="relative">
-      <label
-        htmlFor={id}
-        className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5"
-      >
-        {label}
-      </label>
-
       <div className="relative">
         <input
           ref={inputRef}
           id={id}
-          data-testid={id ? `input-${id}` : undefined}
           type="text"
           value={value.text}
           onChange={handleChange}
           onKeyDown={handleKeyDown}
           onFocus={() => results.length > 0 && setOpen(true)}
           placeholder={placeholder}
-          required={required}
           autoFocus={autoFocus}
           autoComplete="off"
           spellCheck={false}
@@ -229,49 +207,28 @@ export default function PlaceAutocomplete({
           aria-activedescendant={
             activeIdx >= 0 && id ? `${id}-option-${activeIdx}` : undefined
           }
-          className={`w-full px-3 py-2.5 pr-16 text-sm border rounded-lg outline-none transition
-            ${
-              hasCoords
-                ? "border-emerald-400 bg-emerald-50/40 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                : "border-gray-300 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-            }`}
+          className={`w-full rounded-xl border bg-card py-3 pl-11 pr-16 text-sm shadow-sm transition-all placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 ${
+            hasCoords
+              ? "border-primary/50 bg-primary/5 focus:border-primary"
+              : "border-input focus:border-primary"
+          }`}
         />
 
-        {/* Right-side indicators */}
         <div className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
           {hasCoords && !loading && (
-            <span className="text-emerald-500 text-xs font-bold" title="Location resolved">
+            <span className="text-primary text-xs font-bold" title="Location resolved">
               ✓
             </span>
           )}
           {loading && (
-            <svg
-              className="h-4 w-4 animate-spin text-gray-400"
-              viewBox="0 0 24 24"
-              fill="none"
-            >
-              <circle
-                className="opacity-25"
-                cx="12"
-                cy="12"
-                r="10"
-                stroke="currentColor"
-                strokeWidth="4"
-              />
-              <path
-                className="opacity-75"
-                fill="currentColor"
-                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-              />
-            </svg>
+            <span className="h-4 w-4 animate-spin rounded-full border-2 border-muted-foreground border-t-transparent" />
           )}
           {value.text && !loading && (
             <button
               type="button"
-              data-testid={id ? `btn-clear-${id}` : undefined}
               onClick={handleClear}
               aria-label="Clear"
-              className="text-gray-300 hover:text-gray-500 transition-colors text-lg leading-none"
+              className="text-muted-foreground/50 hover:text-muted-foreground transition-colors text-lg leading-none"
             >
               ×
             </button>
@@ -279,20 +236,17 @@ export default function PlaceAutocomplete({
         </div>
       </div>
 
-      {/* Dropdown */}
       {open && results.length > 0 && (
         <ul
           ref={listRef}
           id={id ? `${id}-listbox` : undefined}
-          data-testid={id ? `autocomplete-dropdown-${id}` : "autocomplete-dropdown"}
           role="listbox"
-          className="absolute z-[9999] left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl overflow-hidden max-h-64 overflow-y-auto"
+          className="absolute z-[9999] left-0 right-0 mt-1 bg-card border border-border rounded-xl shadow-xl overflow-hidden max-h-64 overflow-y-auto"
         >
           {results.map((result, i) => (
             <li
               key={result.placeId}
               id={id ? `${id}-option-${i}` : undefined}
-              data-testid={`autocomplete-option-${i}`}
               role="option"
               aria-selected={i === activeIdx}
               onMouseDown={(e) => {
@@ -301,18 +255,18 @@ export default function PlaceAutocomplete({
               }}
               onMouseEnter={() => setActiveIdx(i)}
               className={`flex items-start gap-2.5 px-3 py-2.5 cursor-pointer select-none transition-colors ${
-                i === activeIdx ? "bg-emerald-50" : "hover:bg-gray-50"
-              } ${i > 0 ? "border-t border-gray-100" : ""}`}
+                i === activeIdx ? "bg-primary/10" : "hover:bg-accent"
+              } ${i > 0 ? "border-t border-border/50" : ""}`}
             >
               <span className="text-base flex-shrink-0 mt-0.5" aria-hidden>
                 📍
               </span>
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium text-gray-900 truncate">
+                <p className="text-sm font-medium text-foreground truncate">
                   {result.displayName}
                 </p>
                 {result.subtitle && (
-                  <p className="text-xs text-gray-400 truncate">{result.subtitle}</p>
+                  <p className="text-xs text-muted-foreground truncate">{result.subtitle}</p>
                 )}
               </div>
             </li>
@@ -320,11 +274,10 @@ export default function PlaceAutocomplete({
         </ul>
       )}
 
-      {/* No results hint */}
       {!open && noResults && (
         <div className="mt-1.5">
           <p className="text-xs text-amber-600 flex items-center gap-1">
-            <span>No places found — try a different spelling.</span>
+            No places found — try a different spelling.
           </p>
         </div>
       )}

@@ -38,6 +38,7 @@ FIXES_APPLIED.md
 
 # Screenshots (manual / test captures)
 *.png
+!public/logo.png
 
 # Claude Code
 .claude/
