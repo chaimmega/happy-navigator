@@ -6,15 +6,15 @@ import type { HappinessSignals } from "../../types";
 function baseSignals(overrides: Partial<HappinessSignals> = {}): HappinessSignals {
   return {
     parkCount: 0,
-    waterCount: 0,
-    waterwayCount: 0,
+    waterfrontCount: 0,
+    scenicRoadCount: 0,
     greenCount: 0,
     litCount: 0,
-    calmWaterCount: 0,
-    rapidCount: 0,
-    launchCount: 0,
-    portageCount: 0,
-    motorBoatCount: 0,
+    lowTrafficCount: 0,
+    constructionCount: 0,
+    restStopCount: 0,
+    viewpointCount: 0,
+    highwayCount: 0,
     partial: false,
     ...overrides,
   };
@@ -37,7 +37,7 @@ describe("computeHappyScore", () => {
   describe("score bounds", () => {
     it("score is never below 0", () => {
       const { score } = computeHappyScore(
-        baseSignals({ rapidCount: 1000, motorBoatCount: 1000 }),
+        baseSignals({ constructionCount: 1000, highwayCount: 1000 }),
         1,
         10000
       );
@@ -48,13 +48,13 @@ describe("computeHappyScore", () => {
       const { score } = computeHappyScore(
         baseSignals({
           parkCount: 10000,
-          waterCount: 10000,
-          waterwayCount: 10000,
+          waterfrontCount: 10000,
+          scenicRoadCount: 10000,
           greenCount: 10000,
           litCount: 10000,
-          calmWaterCount: 10000,
-          launchCount: 10000,
-          portageCount: 10000,
+          lowTrafficCount: 10000,
+          restStopCount: 10000,
+          viewpointCount: 10000,
         }),
         1
       );
@@ -69,7 +69,6 @@ describe("computeHappyScore", () => {
 
   describe("parks cap", () => {
     it("parks contribution caps at 30", () => {
-      // parkCount so large that raw contribution would far exceed 30
       const { breakdown } = computeHappyScore(baseSignals({ parkCount: 10000 }), 1);
       expect(breakdown.parks).toBe(30);
     });
@@ -81,29 +80,29 @@ describe("computeHappyScore", () => {
     });
   });
 
-  describe("waterways cap", () => {
-    it("waterways contribution caps at 25", () => {
-      const { breakdown } = computeHappyScore(baseSignals({ waterwayCount: 10000 }), 1);
-      expect(breakdown.waterways).toBe(25);
+  describe("scenicRoads cap", () => {
+    it("scenicRoads contribution caps at 25", () => {
+      const { breakdown } = computeHappyScore(baseSignals({ scenicRoadCount: 10000 }), 1);
+      expect(breakdown.scenicRoads).toBe(25);
     });
 
-    it("waterways below cap scales correctly", () => {
-      // 1 waterway / 1 km * 10 = 10
-      const { breakdown } = computeHappyScore(baseSignals({ waterwayCount: 1 }), 1);
-      expect(breakdown.waterways).toBe(10);
+    it("scenicRoads below cap scales correctly", () => {
+      // 1 scenic road / 1 km * 10 = 10
+      const { breakdown } = computeHappyScore(baseSignals({ scenicRoadCount: 1 }), 1);
+      expect(breakdown.scenicRoads).toBe(10);
     });
   });
 
-  describe("water cap", () => {
-    it("water contribution caps at 20", () => {
-      const { breakdown } = computeHappyScore(baseSignals({ waterCount: 10000 }), 1);
-      expect(breakdown.water).toBe(20);
+  describe("waterfront cap", () => {
+    it("waterfront contribution caps at 20", () => {
+      const { breakdown } = computeHappyScore(baseSignals({ waterfrontCount: 10000 }), 1);
+      expect(breakdown.waterfront).toBe(20);
     });
 
-    it("water below cap scales correctly", () => {
-      // 1 water / 1 km * 8 = 8
-      const { breakdown } = computeHappyScore(baseSignals({ waterCount: 1 }), 1);
-      expect(breakdown.water).toBe(8);
+    it("waterfront below cap scales correctly", () => {
+      // 1 waterfront / 1 km * 8 = 8
+      const { breakdown } = computeHappyScore(baseSignals({ waterfrontCount: 1 }), 1);
+      expect(breakdown.waterfront).toBe(8);
     });
   });
 
@@ -133,56 +132,56 @@ describe("computeHappyScore", () => {
     });
   });
 
-  describe("calmWater cap", () => {
-    it("calmWater contribution caps at 15", () => {
-      const { breakdown } = computeHappyScore(baseSignals({ calmWaterCount: 10000 }), 1);
-      expect(breakdown.calmWater).toBe(15);
+  describe("lowTraffic cap", () => {
+    it("lowTraffic contribution caps at 15", () => {
+      const { breakdown } = computeHappyScore(baseSignals({ lowTrafficCount: 10000 }), 1);
+      expect(breakdown.lowTraffic).toBe(15);
     });
 
-    it("calmWater below cap scales correctly", () => {
-      // 1 calmWater / 1 km * 6 = 6
-      const { breakdown } = computeHappyScore(baseSignals({ calmWaterCount: 1 }), 1);
-      expect(breakdown.calmWater).toBe(6);
-    });
-  });
-
-  describe("launch cap", () => {
-    it("launch contribution caps at 8", () => {
-      const { breakdown } = computeHappyScore(baseSignals({ launchCount: 10000 }), 1);
-      expect(breakdown.launch).toBe(8);
-    });
-
-    it("launch below cap scales correctly", () => {
-      // 1 launch / 1 km * 3 = 3
-      const { breakdown } = computeHappyScore(baseSignals({ launchCount: 1 }), 1);
-      expect(breakdown.launch).toBe(3);
+    it("lowTraffic below cap scales correctly", () => {
+      // 1 lowTraffic / 1 km * 6 = 6
+      const { breakdown } = computeHappyScore(baseSignals({ lowTrafficCount: 1 }), 1);
+      expect(breakdown.lowTraffic).toBe(6);
     });
   });
 
-  describe("portage cap", () => {
-    it("portage contribution caps at 5", () => {
-      const { breakdown } = computeHappyScore(baseSignals({ portageCount: 10000 }), 1);
-      expect(breakdown.portage).toBe(5);
+  describe("restStops cap", () => {
+    it("restStops contribution caps at 8", () => {
+      const { breakdown } = computeHappyScore(baseSignals({ restStopCount: 10000 }), 1);
+      expect(breakdown.restStops).toBe(8);
     });
 
-    it("portage below cap scales correctly", () => {
-      // 1 portage / 1 km * 2 = 2
-      const { breakdown } = computeHappyScore(baseSignals({ portageCount: 1 }), 1);
-      expect(breakdown.portage).toBe(2);
+    it("restStops below cap scales correctly", () => {
+      // 1 restStop / 1 km * 3 = 3
+      const { breakdown } = computeHappyScore(baseSignals({ restStopCount: 1 }), 1);
+      expect(breakdown.restStops).toBe(3);
+    });
+  });
+
+  describe("viewpoints cap", () => {
+    it("viewpoints contribution caps at 5", () => {
+      const { breakdown } = computeHappyScore(baseSignals({ viewpointCount: 10000 }), 1);
+      expect(breakdown.viewpoints).toBe(5);
+    });
+
+    it("viewpoints below cap scales correctly", () => {
+      // 1 viewpoint / 1 km * 2 = 2
+      const { breakdown } = computeHappyScore(baseSignals({ viewpointCount: 1 }), 1);
+      expect(breakdown.viewpoints).toBe(2);
     });
   });
 
   describe("penalties", () => {
-    it("rapids penalty caps at 15", () => {
-      const { breakdown } = computeHappyScore(baseSignals({ rapidCount: 10000 }), 1);
-      expect(breakdown.rapids).toBe(15);
+    it("construction penalty caps at 15", () => {
+      const { breakdown } = computeHappyScore(baseSignals({ constructionCount: 10000 }), 1);
+      expect(breakdown.construction).toBe(15);
     });
 
-    it("rapids penalty reduces score", () => {
-      const noRapids = computeHappyScore(baseSignals(), 1);
-      const withRapids = computeHappyScore(baseSignals({ rapidCount: 1 }), 1);
-      // 1 rapid / 1 km * 5 = 5, so score should drop by 5
-      expect(noRapids.score - withRapids.score).toBe(5);
+    it("construction penalty reduces score", () => {
+      const none = computeHappyScore(baseSignals(), 1);
+      const withConstruction = computeHappyScore(baseSignals({ constructionCount: 1 }), 1);
+      // 1 construction / 1 km * 5 = 5, so score should drop by 5
+      expect(none.score - withConstruction.score).toBe(5);
     });
 
     it("elevation penalty caps at 20", () => {
@@ -206,15 +205,15 @@ describe("computeHappyScore", () => {
       expect(breakdown.elevation).toBe(9);
     });
 
-    it("motorBoat penalty caps at 12", () => {
-      const { breakdown } = computeHappyScore(baseSignals({ motorBoatCount: 10000 }), 1);
-      expect(breakdown.motorBoat).toBe(12);
+    it("highway penalty caps at 12", () => {
+      const { breakdown } = computeHappyScore(baseSignals({ highwayCount: 10000 }), 1);
+      expect(breakdown.highway).toBe(12);
     });
 
-    it("motorBoat penalty reduces score", () => {
+    it("highway penalty reduces score", () => {
       const none = computeHappyScore(baseSignals(), 1);
-      const heavy = computeHappyScore(baseSignals({ motorBoatCount: 1 }), 1);
-      // 1 motorBoat / 1 km * 4 = 4
+      const heavy = computeHappyScore(baseSignals({ highwayCount: 1 }), 1);
+      // 1 highway / 1 km * 4 = 4
       expect(none.score - heavy.score).toBe(4);
     });
   });
@@ -246,9 +245,8 @@ describe("computeHappyScore", () => {
     });
 
     it("partial penalty is floor 5 even when raw * 0.85 < 5", () => {
-      // Extreme penalties can bring raw below 5; partial floor should still be 5
       const { score } = computeHappyScore(
-        baseSignals({ rapidCount: 1000, motorBoatCount: 1000, partial: true }),
+        baseSignals({ constructionCount: 1000, highwayCount: 1000, partial: true }),
         1,
         10000
       );
@@ -256,9 +254,9 @@ describe("computeHappyScore", () => {
     });
 
     it("partial reduces score when raw is high", () => {
-      const full = computeHappyScore(baseSignals({ parkCount: 5, waterwayCount: 5 }), 1);
+      const full = computeHappyScore(baseSignals({ parkCount: 5, scenicRoadCount: 5 }), 1);
       const partial = computeHappyScore(
-        baseSignals({ parkCount: 5, waterwayCount: 5, partial: true }),
+        baseSignals({ parkCount: 5, scenicRoadCount: 5, partial: true }),
         1
       );
       expect(partial.score).toBeLessThan(full.score);
@@ -279,17 +277,17 @@ describe("computeHappyScore", () => {
 
   describe("score additive across all positive signals", () => {
     it("all caps reached → score is 100 (clamped)", () => {
-      // Max possible positive: 5+30+25+20+15+10+15+8+5 = 133; clamped to 100
+      // Max possible positive: 5+30+25+20+15+15+10+8+5 = 133; clamped to 100
       const { score } = computeHappyScore(
         baseSignals({
           parkCount: 10000,
-          waterwayCount: 10000,
-          waterCount: 10000,
+          scenicRoadCount: 10000,
+          waterfrontCount: 10000,
           greenCount: 10000,
           litCount: 10000,
-          calmWaterCount: 10000,
-          launchCount: 10000,
-          portageCount: 10000,
+          lowTrafficCount: 10000,
+          restStopCount: 10000,
+          viewpointCount: 10000,
         }),
         1
       );
@@ -298,7 +296,7 @@ describe("computeHappyScore", () => {
 
     it("breakdown values are rounded integers", () => {
       const { breakdown } = computeHappyScore(
-        baseSignals({ parkCount: 3, waterwayCount: 2 }),
+        baseSignals({ parkCount: 3, scenicRoadCount: 2 }),
         3
       );
       for (const val of Object.values(breakdown)) {

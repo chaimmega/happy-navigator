@@ -5,7 +5,7 @@ import Anthropic from "@anthropic-ai/sdk";
 export const maxDuration = 30;
 export const runtime = "nodejs";
 import { geocode } from "../../lib/nominatim";
-import { getCanoeRoutes } from "../../lib/osrm";
+import { getDrivingRoutes } from "../../lib/osrm";
 import { getHappinessSignals } from "../../lib/overpass";
 import { getRouteElevation } from "../../lib/elevation";
 import { computeHappyScore } from "../../lib/happiness";
@@ -61,32 +61,32 @@ async function callAI(
     durationMin: Math.round(r.duration / 60),
     happyScore: r.happyScore,
     parks: r.signals.parkCount,
-    water: r.signals.waterCount,
-    waterways: r.signals.waterwayCount,
+    waterfront: r.signals.waterfrontCount,
+    scenicRoads: r.signals.scenicRoadCount,
     greenSpaces: r.signals.greenCount,
     litSegments: r.signals.litCount,
-    calmWater: r.signals.calmWaterCount,
-    boatLaunches: r.signals.launchCount,
-    portagePoints: r.signals.portageCount,
-    motorBoatZones: r.signals.motorBoatCount,
-    rapids: r.signals.rapidCount,
+    lowTraffic: r.signals.lowTrafficCount,
+    restStops: r.signals.restStopCount,
+    viewpoints: r.signals.viewpointCount,
+    constructionZones: r.signals.constructionCount,
+    highwaySegments: r.signals.highwayCount,
     elevationGainM: r.elevationGainM ?? null,
     partialData: r.signals.partial,
   }));
 
-  const prompt = `You are a friendly canoe route advisor. Analyse these candidate routes and identify the best one for a happy paddling experience.
+  const prompt = `You are a friendly driving route advisor. Analyse these candidate routes and identify the best one for a happy, scenic driving experience.
 
 Route: ${startName} → ${endName}
 
 Scored routes (all data per km, higher = better except penalties):
 ${JSON.stringify(summary, null, 2)}
 
-Score factors: parks (+30 max), waterways (+25), water features (+20), green spaces (+15), calm water (+15), lighting (+10), launches (+8), portage points (+5). Penalties: motorboat zones (−12), rapids (−15), steep portage (−20). Partial data = 15% score reduction.
+Score factors: parks (+30 max), scenic roads (+25), waterfront (+20), green spaces (+15), low traffic (+15), lighting (+10), rest stops (+8), viewpoints (+5). Penalties: construction zones (−15), steep terrain (−20), highway/motorway segments (−12). Partial data = 15% score reduction.
 
 Instructions:
 1. The bestRouteId MUST be the route with the highest happyScore — do not override this.
-2. Write 2–3 short, specific bullets explaining WHY it scores highest (cite actual features: waterway count, park count, calm sections, absence of rapids, etc.).
-3. Only add suggestedStops if the data strongly implies notable features (parks, launches, calm bays). Leave as [] if uncertain.
+2. Write 2–3 short, specific bullets explaining WHY it scores highest (cite actual features: scenic road count, park count, low-traffic segments, waterfront, absence of highway stretches, etc.).
+3. Only add suggestedStops if the data strongly implies notable features (parks, viewpoints, waterfront areas). Leave as [] if uncertain.
 4. Be specific and factual — mention numbers from the data, not generic advice.
 
 Respond with ONLY valid JSON:
@@ -255,7 +255,7 @@ export async function POST(req: NextRequest) {
   // ── 3. Fetch routes from OSRM ───────────────────────────────────────────────
   let osrmRoutes;
   try {
-    osrmRoutes = await getCanoeRoutes(
+    osrmRoutes = await getDrivingRoutes(
       { lat: startGeo.lat, lng: startGeo.lng },
       { lat: endGeo.lat, lng: endGeo.lng },
       viaCoords

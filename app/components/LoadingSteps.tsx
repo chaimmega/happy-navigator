@@ -4,8 +4,8 @@ import { motion } from "framer-motion";
 
 const steps = [
   { emoji: "📍", text: "Geocoding your locations..." },
-  { emoji: "🚗", text: "Fetching route alternatives..." },
-  { emoji: "🌿", text: "Scanning parks, waterways & points of interest..." },
+  { emoji: "🚗", text: "Fetching driving route alternatives..." },
+  { emoji: "🌿", text: "Scanning scenic roads, parks & points of interest..." },
   { emoji: "✨", text: "AI finding happiest route..." },
 ];
 

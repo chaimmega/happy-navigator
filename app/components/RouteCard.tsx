@@ -19,12 +19,12 @@ interface RouteCardProps {
 
 const signalChips = [
   { key: "parkCount", emoji: "🌳", label: "parks" },
-  { key: "waterwayCount", emoji: "🌊", label: "waterways" },
-  { key: "waterCount", emoji: "💧", label: "water" },
-  { key: "calmWaterCount", emoji: "🏊", label: "calm water" },
+  { key: "waterfrontCount", emoji: "💧", label: "waterfront" },
+  { key: "scenicRoadCount", emoji: "🛣️", label: "scenic roads" },
+  { key: "lowTrafficCount", emoji: "🚗", label: "low traffic" },
   { key: "greenCount", emoji: "🌿", label: "green" },
-  { key: "launchCount", emoji: "⛵", label: "launches" },
-  { key: "litCount", emoji: "💡", label: "lit" },
+  { key: "restStopCount", emoji: "☕", label: "rest stops" },
+  { key: "viewpointCount", emoji: "🏔️", label: "viewpoints" },
 ] as const;
 
 function escapeXml(s: string): string {
@@ -64,12 +64,12 @@ ${trackPoints}
 
 const positiveBreakdown: { key: keyof ScoreBreakdown; color: string; label: string }[] = [
   { key: "parks", color: "hsl(160, 84%, 39%)", label: "Parks" },
-  { key: "waterways", color: "hsl(217, 91%, 60%)", label: "Waterways" },
-  { key: "water", color: "hsl(199, 89%, 48%)", label: "Water" },
+  { key: "scenicRoads", color: "hsl(217, 91%, 60%)", label: "Scenic Roads" },
+  { key: "waterfront", color: "hsl(199, 89%, 48%)", label: "Waterfront" },
   { key: "green", color: "hsl(84, 85%, 50%)", label: "Green" },
-  { key: "calmWater", color: "hsl(199, 95%, 74%)", label: "Calm Water" },
-  { key: "launch", color: "hsl(172, 66%, 50%)", label: "Launches" },
-  { key: "portage", color: "hsl(239, 84%, 67%)", label: "Portage" },
+  { key: "lowTraffic", color: "hsl(199, 95%, 74%)", label: "Low Traffic" },
+  { key: "restStops", color: "hsl(172, 66%, 50%)", label: "Rest Stops" },
+  { key: "viewpoints", color: "hsl(239, 84%, 67%)", label: "Viewpoints" },
   { key: "lit", color: "hsl(38, 92%, 50%)", label: "Well-Lit" },
   { key: "base", color: "hsl(220, 9%, 75%)", label: "Base" },
 ];
@@ -89,7 +89,7 @@ export function RouteCard({ route, isBest, isSelected, metric, onClick, startNam
     (sum, s) => sum + (route.scoreBreakdown[s.key] || 0), 0
   );
 
-  const calories = Math.round(280 * (route.duration / 3600));
+  const calories = Math.round(50 * (route.duration / 3600));
   const co2Grams = estimateCO2Saved(route.distance);
   const co2Display = co2Grams >= 1000 ? `${(co2Grams / 1000).toFixed(1)} kg` : `${co2Grams} g`;
 
@@ -188,16 +188,16 @@ export function RouteCard({ route, isBest, isSelected, metric, onClick, startNam
               </div>
 
               {/* Penalties */}
-              {(route.scoreBreakdown.rapids !== 0 || route.scoreBreakdown.elevation !== 0 || route.scoreBreakdown.motorBoat !== 0) && (
+              {(route.scoreBreakdown.construction !== 0 || route.scoreBreakdown.elevation !== 0 || route.scoreBreakdown.highway !== 0) && (
                 <div className="flex flex-wrap gap-2.5 text-[11px]">
-                  {route.scoreBreakdown.rapids !== 0 && (
-                    <span className="text-orange-500">🌀 Rapids {route.scoreBreakdown.rapids}</span>
+                  {route.scoreBreakdown.construction !== 0 && (
+                    <span className="text-orange-500">🚧 Construction {route.scoreBreakdown.construction}</span>
                   )}
                   {route.scoreBreakdown.elevation !== 0 && (
                     <span className="text-amber">⛰️ Hilly {route.scoreBreakdown.elevation}</span>
                   )}
-                  {route.scoreBreakdown.motorBoat !== 0 && (
-                    <span className="text-destructive">🚤 Motorboat {route.scoreBreakdown.motorBoat}</span>
+                  {route.scoreBreakdown.highway !== 0 && (
+                    <span className="text-destructive">🛣️ Highway {route.scoreBreakdown.highway}</span>
                   )}
                 </div>
               )}

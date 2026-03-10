@@ -2,7 +2,7 @@
 
 ## Project overview
 
-Next.js 15 (App Router) + TypeScript + Tailwind web app that scores canoe routes for "happiness" using Google Maps APIs, OpenStreetMap Overpass for feature detection, and a single Claude Haiku AI call per search.
+Next.js 15 (App Router) + TypeScript + Tailwind web app that scores **driving routes** for "happiness" using Google Maps APIs, OpenStreetMap Overpass for feature detection, and a single Claude Haiku AI call per search. It finds more enjoyable driving routes between two places, prioritizing scenic roads, calmer traffic, greenery, waterfronts, and pleasant surroundings instead of only the fastest route.
 
 ## Common commands
 
@@ -18,8 +18,8 @@ npm run lint      # ESLint
 | File | Purpose |
 |---|---|
 | `app/api/navigate/route.ts` | **Main server pipeline** — geocode → Directions → Overpass → score → AI |
-| `app/lib/osrm.ts` | Canoe routing via Google Directions API (server-side, walking profile) |
-| `app/lib/overpass.ts` | OSM feature queries — parks, water, waterways, launches |
+| `app/lib/osrm.ts` | Driving routes via Google Directions API (server-side, driving mode) |
+| `app/lib/overpass.ts` | OSM feature queries — parks, scenic roads, waterfront, viewpoints, rest stops |
 | `app/lib/happiness.ts` | Weighted 0–100 scoring formula |
 | `app/lib/nominatim.ts` | Geocoding via Google Geocoding API (server-side) |
 | `app/lib/parseGoogleMapsUrl.ts` | Parse Google Maps directions URLs |
@@ -44,7 +44,7 @@ npm run lint      # ESLint
 | API | Base URL | Key? | Timeout | Notes |
 |---|---|---|---|---|
 | Google Geocoding | `maps.googleapis.com/maps/api/geocode/json` | Yes | 8 s | Server-side, cached 24h |
-| Google Directions | `maps.googleapis.com/maps/api/directions/json` | Yes | 15 s | Walking mode, cached 2h |
+| Google Directions | `maps.googleapis.com/maps/api/directions/json` | Yes | 15 s | Driving mode, cached 2h |
 | Google Places | Client-side via Maps JS API | Yes (`NEXT_PUBLIC_`) | — | Uses session tokens for cost savings |
 | Google Maps JS | Client-side | Yes (`NEXT_PUBLIC_`) | — | Loaded by GoogleMapsProvider |
 | Overpass | `overpass-api.de/api/interpreter` | No | 14 s | Conservative use — 1 compound query per route |
@@ -54,11 +54,18 @@ npm run lint      # ESLint
 
 ```
 score = 5 (base)
-      + min((parks     / distKm) × 12,  30)   ← weights in happiness.ts
-      + min((waterways / distKm) × 10,  25)
-      + min((water     / distKm) × 8,   20)
-      + min((green     / distKm) × 5,   15)
-      × 0.85  if signals.partial = true        ← confidence penalty, floor 5
+      + min((parks       / distKm) × 12,  30)   ← weights in happiness.ts
+      + min((scenicRoads / distKm) × 10,  25)
+      + min((waterfront  / distKm) × 8,   20)
+      + min((green       / distKm) × 5,   15)
+      + min((lowTraffic  / distKm) × 6,   15)
+      + min((lit         / distKm) × 4,   10)
+      + min((restStops   / distKm) × 3,    8)
+      + min((viewpoints  / distKm) × 2,    5)
+      - min((construction / distKm) × 5,  15)   ← penalties
+      - min((elevation   / distKm) × 3,   20)
+      - min((highway     / distKm) × 4,   12)
+      × 0.85  if signals.partial = true          ← confidence penalty, floor 5
 ```
 
 To adjust weights or penalties, edit `app/lib/happiness.ts` only — nowhere else.

@@ -34,19 +34,18 @@ function computeBbox(points: [number, number][], bufferDeg = 0.003): string {
 
 /**
  * Build a compact Overpass QL query using a global bbox pre-filter + around corridor.
- * The bbox dramatically reduces the data set Overpass must check, making the
- * around filter fast enough even in dense urban OSM data.
  *
- * Tag categories queried:
+ * Tag categories queried for driving happiness:
  *   Parks / leisure green areas
  *   Green land-use (forest, grass, meadow)
- *   Water (natural + waterway)
- *   Waterways (rivers, canals, streams — canoe infrastructure)
- *   Boat launches / put-in points (slipways, canoe access)
- *   Portage points (portage access)
- *   Lit ways (lighting along bank)
- *   Rapids (whitewater rapid grades — difficulty penalty)
- *   Motorboat zones (motor boat traffic — safety penalty)
+ *   Waterfront (natural water, coastline, riverbanks)
+ *   Scenic roads (secondary, tertiary, unclassified — quieter roads)
+ *   Low-traffic segments (residential, living_street)
+ *   Viewpoints (tourism=viewpoint)
+ *   Rest stops (amenity rest areas, cafés, picnic sites)
+ *   Lit ways (well-lit streets)
+ *   Construction zones (penalty)
+ *   Highway / motorway segments (penalty)
  */
 function buildQuery(points: [number, number][], radiusM = 250): string {
   const coords = points.map(([lng, lat]) => `${lat},${lng}`).join(",");
@@ -62,22 +61,24 @@ function buildQuery(points: [number, number][], radiusM = 250): string {
   way["natural"~"^(wood|scrub|heath)$"](${around});
   node["natural"="water"](${around});
   way["natural"="water"](${around});
-  way["waterway"~"^(river|canal|stream|drain|riverbank)$"](${around});
-  node["leisure"="slipway"](${around});
-  way["leisure"="slipway"](${around});
-  node["canoe"~"^(put_in|portage|yes)$"](${around});
-  node["portage"="yes"](${around});
+  way["natural"="coastline"](${around});
+  way["waterway"~"^(river|canal|riverbank)$"](${around});
+  way["highway"~"^(secondary|tertiary|unclassified)$"](${around});
+  way["highway"~"^(residential|living_street)$"](${around});
+  node["tourism"="viewpoint"](${around});
+  node["amenity"~"^(rest_area|cafe|picnic_site)$"](${around});
+  node["highway"="rest_area"](${around});
   way["lit"="yes"](${around});
-  node["whitewater:rapid_grade"](${around});
-  way["motorboat"~"^(yes|designated)$"](${around});
+  way["highway"="construction"](${around});
+  way["highway"~"^(motorway|trunk)$"](${around});
 );
 out tags qt;`;
 }
 
 const EMPTY_SIGNALS: HappinessSignals = {
-  parkCount: 0, waterCount: 0, waterwayCount: 0, greenCount: 0,
-  litCount: 0, calmWaterCount: 0, rapidCount: 0,
-  launchCount: 0, portageCount: 0, motorBoatCount: 0,
+  parkCount: 0, waterfrontCount: 0, scenicRoadCount: 0, greenCount: 0,
+  litCount: 0, lowTrafficCount: 0, constructionCount: 0,
+  restStopCount: 0, viewpointCount: 0, highwayCount: 0,
   partial: true,
 };
 
@@ -105,7 +106,7 @@ async function fetchOverpass(query: string): Promise<Response> {
 }
 
 /**
- * Query OSM via Overpass for happiness signals along a canoe route.
+ * Query OSM via Overpass for happiness signals along a driving route.
  * Degrades gracefully on timeout / rate-limit — returns zero counts with partial=true.
  */
 export async function getHappinessSignals(
@@ -129,15 +130,15 @@ export async function getHappinessSignals(
     console.log(`[overpass] ${elements.length} elements returned`);
 
     let parkCount = 0;
-    let waterCount = 0;
-    let waterwayCount = 0;
+    let waterfrontCount = 0;
+    let scenicRoadCount = 0;
     let greenCount = 0;
     let litCount = 0;
-    let calmWaterCount = 0;
-    let rapidCount = 0;
-    let launchCount = 0;
-    let portageCount = 0;
-    let motorBoatCount = 0;
+    let lowTrafficCount = 0;
+    let constructionCount = 0;
+    let restStopCount = 0;
+    let viewpointCount = 0;
+    let highwayCount = 0;
 
     for (const el of elements) {
       const t = el.tags ?? {};
@@ -150,37 +151,40 @@ export async function getHappinessSignals(
         t.natural === "wood" || t.natural === "scrub" || t.natural === "heath"
       ) greenCount++;
 
-      if (t.natural === "water" || t.waterway) waterCount++;
+      // Waterfront: lakes, rivers, coastline
+      if (t.natural === "water" || t.natural === "coastline" || t.waterway) waterfrontCount++;
 
-      // Waterway infrastructure (rivers, canals, streams)
-      if (t.waterway) waterwayCount++;
+      // Scenic roads: quieter secondary/tertiary/unclassified roads
+      if (
+        t.highway === "secondary" || t.highway === "tertiary" ||
+        t.highway === "unclassified"
+      ) scenicRoadCount++;
 
-      // Calm water sections (lakes/ponds = calm paddling)
-      if (t.natural === "water") calmWaterCount++;
+      // Low-traffic residential streets
+      if (t.highway === "residential" || t.highway === "living_street") lowTrafficCount++;
 
       if (t.lit === "yes") litCount++;
 
-      // Boat launches and canoe put-in points
+      // Viewpoints
+      if (t.tourism === "viewpoint") viewpointCount++;
+
+      // Rest stops, cafés, picnic sites
       if (
-        t.leisure === "slipway" ||
-        t.canoe === "put_in" ||
-        t.canoe === "yes"
-      ) launchCount++;
+        t.amenity === "rest_area" || t.amenity === "cafe" ||
+        t.amenity === "picnic_site" || t.highway === "rest_area"
+      ) restStopCount++;
 
-      // Portage points
-      if (t.portage === "yes" || t.canoe === "portage") portageCount++;
+      // Construction zones (penalty)
+      if (t.highway === "construction") constructionCount++;
 
-      // Rapids — difficulty penalty
-      if (t["whitewater:rapid_grade"]) rapidCount++;
-
-      // Motorboat zones — safety penalty
-      if (t.motorboat === "yes" || t.motorboat === "designated") motorBoatCount++;
+      // Motorway / trunk roads (penalty — stressful driving)
+      if (t.highway === "motorway" || t.highway === "trunk") highwayCount++;
     }
 
     return {
-      parkCount, waterCount, waterwayCount, greenCount,
-      litCount, calmWaterCount, rapidCount,
-      launchCount, portageCount, motorBoatCount,
+      parkCount, waterfrontCount, scenicRoadCount, greenCount,
+      litCount, lowTrafficCount, constructionCount,
+      restStopCount, viewpointCount, highwayCount,
       partial: false,
     };
   } catch (err) {

@@ -3,42 +3,42 @@ export interface Coordinates {
   lng: number;
 }
 
-/** Raw signals collected from OSM Overpass for a canoe route */
+/** Raw signals collected from OSM Overpass for a driving route */
 export interface HappinessSignals {
   parkCount: number;
-  waterCount: number;
-  waterwayCount: number;   // waterway sections near route (rivers, canals, streams)
+  waterfrontCount: number;     // waterfront areas near route (lakes, rivers, coastline)
+  scenicRoadCount: number;     // scenic / quiet roads
   greenCount: number;
-  litCount: number;           // ways with lit=yes (lighting along bank)
-  calmWaterCount: number;     // sheltered/calm water sections (lakes, ponds)
-  rapidCount: number;         // rapids = difficulty penalty
-  launchCount: number;        // boat launches / put-in points
-  portageCount: number;       // portage access points
-  motorBoatCount: number;     // motor boat traffic zones (penalty)
+  litCount: number;            // ways with lit=yes (well-lit streets)
+  lowTrafficCount: number;     // residential / low-traffic road segments
+  constructionCount: number;   // construction zones (penalty)
+  restStopCount: number;       // rest areas, cafés, amenities
+  viewpointCount: number;      // tourism viewpoints / lookouts
+  highwayCount: number;        // motorway / trunk road segments (penalty)
   /** true when Overpass timed out / errored — scores are estimated */
   partial: boolean;
 }
 
 /** Per-category score contributions, each capped at their max */
 export interface ScoreBreakdown {
-  parks: number;        // 0–30
-  waterways: number;    // 0–25
-  water: number;        // 0–20
-  green: number;        // 0–15
-  lit: number;          // 0–10
-  calmWater: number;    // 0–15 (sheltered/calm water sections)
-  launch: number;       // 0–8  (boat launches / put-in points)
-  portage: number;      // 0–5  (portage access points)
-  base: number;         // always 5
-  rapids: number;       // 0–15 (penalty magnitude, subtracted from score)
-  elevation: number;    // 0–20 (penalty magnitude, subtracted from score)
-  motorBoat: number;    // 0–12 (penalty magnitude, motor boat zones)
+  parks: number;          // 0–30
+  scenicRoads: number;    // 0–25
+  waterfront: number;     // 0–20
+  green: number;          // 0–15
+  lowTraffic: number;     // 0–15
+  lit: number;            // 0–10
+  restStops: number;      // 0–8
+  viewpoints: number;     // 0–5
+  base: number;           // always 5
+  construction: number;   // 0–15 (penalty magnitude, subtracted from score)
+  elevation: number;      // 0–20 (penalty magnitude, subtracted from score)
+  highway: number;        // 0–12 (penalty magnitude, motorway segments)
 }
 
-/** A route from OSRM, enriched with happiness data */
+/** A route from Google Directions, enriched with happiness data */
 export interface ScoredRoute {
   id: number;
-  /** [lng, lat] pairs — OSRM's native GeoJSON order */
+  /** [lng, lat] pairs — GeoJSON order */
   geometry: [number, number][];
   distance: number; // metres
   duration: number; // seconds
